@@ -1,0 +1,41 @@
+{
+  "_readme": "Merge these entries into your user-level Claude Code settings. Replace C:\\path\\to\\agent-ladder with the actual checkout path. The hook scripts fail open; the grill gate blocks one build write only, and the other hooks are reminders.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\grill_gate.ps1\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\grill_gate.ps1\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\delegation_gate.ps1\""
+          },
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\checkpoint_finisher_guard.ps1\""
+          }
+        ]
+      }
+    ]
+  }
+}
