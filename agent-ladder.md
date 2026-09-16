@@ -65,6 +65,7 @@ When multiple capable agents are available:
 2. Preserve taste and judgment for user-facing or shipping output.
 3. Use cost only as a tie-breaker after capability and fit.
 4. Prefer the simplest capable route once the cost gate is passed.
+5. Name the model on every delegated spawn. Omitting the model parameter is not a way to accept a default tier; it is an unrecorded choice, and the review in step 6 cannot tell which tier did the work.
 
 Do not encode fast-changing model names or permanent numerical rankings into the ladder.
 
