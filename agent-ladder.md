@@ -57,6 +57,8 @@ Before handing work to a second runtime, make the specification self-contained. 
 
 The calling session reviews every delegated result before completion. For anything that ships, review the actual changed files and run the acceptance checks against the final tree. A successful sub-agent run is evidence of execution, not proof that the result is correct or publishable.
 
+Check the result against the original brief, never against the builder's own summary of what it did; a builder can launder its own wrong "done" claim without meaning to. With one or two delegated tasks in flight, the calling session does this check itself. With three or more running at once, spawn one fresh reviewer agent (model named, per principle 5) to re-run the acceptance checks, because at that width the caller's own skim is exactly what lets an incomplete result through.
+
 ## Model-selection principles
 
 When multiple capable agents are available:
