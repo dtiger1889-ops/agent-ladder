@@ -1,5 +1,5 @@
 {
-  "_readme": "Merge these entries into your user-level Claude Code settings. Replace C:\\path\\to\\agent-ladder with the actual checkout path. The hook scripts fail open; the grill gate blocks one build write only, and the other hooks are reminders.",
+  "_readme": "Merge these entries into your user-level Claude Code settings. Replace C:\\path\\to\\agent-ladder with the actual checkout path. The hook scripts fail open. Blocking hooks: grill_gate blocks one ungrilled build write; model_gate refuses every sub-agent spawn with no model or with haiku; orchestrator_mode refuses main-session code writes only while the per-session mode is on (set by orchestrate_flag from your prompt, or automatically once delegation_gate's counter reaches 150 inline code lines). The other hooks are reminders. Keep delegation_gate in its OWN PostToolUse entry: when several hooks in one entry exit 2 on the same call, only one message reaches the model.",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\grill_gate.ps1\""
+          },
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\orchestrate_flag.ps1\""
           }
         ]
       }
@@ -20,6 +24,24 @@
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\grill_gate.ps1\""
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\model_gate.ps1\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\orchestrator_mode.ps1\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -28,11 +50,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\delegation_gate.ps1\""
-          },
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\checkpoint_finisher_guard.ps1\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|Bash|PowerShell",
+        "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\checkpoint_finisher_guard.ps1\""
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\delegation_gate.ps1\""
           }
         ]
       }

@@ -16,19 +16,22 @@ The central rule is simple: route by the shape and weight of the work, not by th
 
 The cost gate comes first: if the work can be finished in a few commands or a short edit, delegation usually costs more context than it saves.
 
-See [agent-ladder.md](agent-ladder.md) for the full decision rules and source notes.
+See [agent-ladder.md](agent-ladder.md) for the full decision rules and source notes, and [HISTORY.md](HISTORY.md) for where each rule came from: the dated incidents, reviews and owner decisions behind every step, and the 2026-09-18 transcript audit that turned the prose rule into the hooks below.
 
 ## Implementation
 
 The repository also includes the implementation that turns the ladder into working guardrails:
 
-- `hooks/delegation_gate.ps1` — reminds the session to delegate after enough inline code has accumulated.
+- `hooks/model_gate.ps1` — refuses any sub-agent spawn that names no model or names Haiku (principle 5, every time, no state).
+- `hooks/orchestrate_flag.ps1` — turns a per-session orchestrator mode on or off from the prompt ("orchestrate", "delegate the rest", `/orchestrate on`; "go inline", `/orchestrate off`) and prints one short delegation reminder on every real prompt.
+- `hooks/orchestrator_mode.ps1` — while the mode is on, refuses code writes from the main session (files with code extensions, shell heredocs, `Set-Content`, `sed -i`); docs and the checkpoint pass; workers are exempt because their hook input carries an agent id. Also turns the mode on by itself once the delegation gate's counter reaches 150 inline code lines.
+- `hooks/delegation_gate.ps1` — counts inline code lines, including shell heredoc writes, and reminds the session to delegate once past 600. Give it its own PostToolUse entry: when several hooks in one entry exit 2 on the same call, only one message survives.
 - `hooks/grill_gate.ps1` — detects build kickoffs, advises an interview, and blocks the first ungrilled build write once.
 - `hooks/checkpoint_finisher_guard.ps1` — reminds the session to verify and finish a checkpoint after editing it.
 - `scripts/finish-checkpoint.ps1` — stamps, measures, sorts, and optionally archives a checkpoint.
 - `scripts/sort_open_threads.ps1` — keeps tagged open-thread bullets in owner/agent and low/high order.
 - `scripts/verify_checkpoint_claims.ps1` — checks checkpoint paths, state claims, and routing tags.
-- `tests/grill_gate_tests.ps1` — wrapper tests for the grill gate; all 19 tests pass in the reference environment.
+- `tests/*_tests.ps1` — wrapper tests for each hook (grill gate 19, model gate 7, orchestrate flag 14, orchestrator mode 13, delegation gate 8); all pass in the reference environment.
 - `config/claude-hooks.example.json` — example user-level hook wiring.
 
 The three checkpoint scripts are the same files the [Claude Code Harness Toolbox](https://github.com/dtiger1889-ops/claude-harness-toolbox) ships inside its `checkpoint` skill; that repo is their home and carries the skill text that calls them. They are mirrored here so the finisher hook has something to point at.
