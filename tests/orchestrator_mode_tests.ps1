@@ -28,8 +28,12 @@ function WriteJson([string]$fp, [string]$s, [string]$agentId = $null) {
     if ($agentId) { $h.agent_id = $agentId }
     return ($h | ConvertTo-Json -Compress -Depth 6)
 }
-function EditJson([string]$fp, [string]$s) {
-    return (@{ hook_event_name = 'PreToolUse'; tool_name = 'Edit'; session_id = $s; tool_input = @{ file_path = $fp; old_string = 'a'; new_string = 'b' } } | ConvertTo-Json -Compress)
+function EditJson([string]$fp, [string]$s, [string]$ns = 'b') {
+    return (@{ hook_event_name = 'PreToolUse'; tool_name = 'Edit'; session_id = $s; tool_input = @{ file_path = $fp; old_string = 'a'; new_string = $ns } } | ConvertTo-Json -Compress)
+}
+function MultiEditJson([string]$fp, [string]$s, [string[]]$newStrings) {
+    $edits = @($newStrings | ForEach-Object { @{ old_string = 'a'; new_string = $_ } })
+    return (@{ hook_event_name = 'PreToolUse'; tool_name = 'MultiEdit'; session_id = $s; tool_input = @{ file_path = $fp; edits = $edits } } | ConvertTo-Json -Compress -Depth 6)
 }
 function BashJson([string]$cmd, [string]$s) {
     return (@{ hook_event_name = 'PreToolUse'; tool_name = 'Bash'; session_id = $s; tool_input = @{ command = $cmd } } | ConvertTo-Json -Compress)
@@ -114,6 +118,80 @@ Check '12 counter 149 no flag passes' ($r.code -eq 0) "code=$($r.code)"
 $s13 = NewSid '13'; Track $s13; Set-Counter $s13 150; Set-OrchOff $s13
 $r = Invoke-Hook (WriteJson 'C:\proj\foo.py' $s13)
 Check '13 counter 150 with off marker passes' ($r.code -eq 0) "code=$($r.code)"
+
+function Lines([int]$n) { return (1..$n | ForEach-Object { "l$_" }) -join "`n" }
+
+# 14. flag on, Edit on .py with 40-line new_string -> 0 (small-edit allowance boundary)
+$s14 = NewSid '14'; Track $s14; Set-OrchOn $s14
+$r = Invoke-Hook (EditJson 'C:\proj\foo.py' $s14 (Lines 40))
+Check '14 flag on Edit py 40-line new_string passes' ($r.code -eq 0) "code=$($r.code)"
+
+# 15. flag on, Edit on .py with 41-line new_string -> 2 (too big for allowance)
+$s15 = NewSid '15'; Track $s15; Set-OrchOn $s15
+$r = Invoke-Hook (EditJson 'C:\proj\foo.py' $s15 (Lines 41))
+Check '15 flag on Edit py 41-line new_string refused' ($r.code -eq 2) "code=$($r.code)"
+
+# 16. flag on, Edit on .py with empty new_string (deletion) -> 0
+$s16 = NewSid '16'; Track $s16; Set-OrchOn $s16
+$r = Invoke-Hook (EditJson 'C:\proj\foo.py' $s16 '')
+Check '16 flag on Edit py deletion passes' ($r.code -eq 0) "code=$($r.code)"
+
+# 17. flag on, MultiEdit on .py with two edits summing to 40 lines -> 0; summing to 41 -> 2
+$s17 = NewSid '17'; Track $s17; Set-OrchOn $s17
+$r = Invoke-Hook (MultiEditJson 'C:\proj\foo.py' $s17 @((Lines 20), (Lines 20)))
+Check '17a flag on MultiEdit py two edits summing 40 lines passes' ($r.code -eq 0) "code=$($r.code)"
+$r = Invoke-Hook (MultiEditJson 'C:\proj\foo.py' $s17 @((Lines 20), (Lines 21)))
+Check '17b flag on MultiEdit py two edits summing 41 lines refused' ($r.code -eq 2) "code=$($r.code)"
+
+# 18. flag on, & running a .ps1 script (not writing it) -> 0
+$s18 = NewSid '18'; Track $s18; Set-OrchOn $s18
+$r = Invoke-Hook (BashJson '& "C:\x\skill-sync.ps1"' $s18)
+Check '18 flag on running ps1 script passes' ($r.code -eq 0) "code=$($r.code)"
+
+# 19. flag on, powershell -File running a test script -> 0
+$s19 = NewSid '19'; Track $s19; Set-OrchOn $s19
+$r = Invoke-Hook (BashJson 'powershell -NoProfile -File tests\foo_tests.ps1' $s19)
+Check '19 flag on powershell -File passes' ($r.code -eq 0) "code=$($r.code)"
+
+# 20. flag on, git add/commit naming a code file -> 0
+$s20 = NewSid '20'; Track $s20; Set-OrchOn $s20
+$r = Invoke-Hook (BashJson 'git add hooks/a.ps1 && git commit -m x' $s20)
+Check '20 flag on git add/commit code file passes' ($r.code -eq 0) "code=$($r.code)"
+
+# 21. flag on, grep -c on a code file -> 0
+$s21 = NewSid '21'; Track $s21; Set-OrchOn $s21
+$r = Invoke-Hook (BashJson 'grep -c "abc" hooks/a.ps1' $s21)
+Check '21 flag on grep -c code file passes' ($r.code -eq 0) "code=$($r.code)"
+
+# 22. flag on, running a .py script with args -> 0
+$s22 = NewSid '22'; Track $s22; Set-OrchOn $s22
+$r = Invoke-Hook (BashJson 'python scan.py --certify repo' $s22)
+Check '22 flag on python scan.py run passes' ($r.code -eq 0) "code=$($r.code)"
+
+# 23. flag on, echo redirect to .py -> 2
+$s23 = NewSid '23'; Track $s23; Set-OrchOn $s23
+$r = Invoke-Hook (BashJson 'echo x > out.py' $s23)
+Check '23 flag on echo redirect to py refused' ($r.code -eq 2) "code=$($r.code)"
+
+# 24. flag on, heredoc redirected to .py (multi-line) -> 2
+$s24 = NewSid '24'; Track $s24; Set-OrchOn $s24
+$r = Invoke-Hook (BashJson "cat <<'EOF' > gen.py`nprint(1)`nEOF" $s24)
+Check '24 flag on heredoc redirect to py refused' ($r.code -eq 2) "code=$($r.code)"
+
+# 25. flag on, Set-Content -LiteralPath a.ps1 -> 2
+$s25 = NewSid '25'; Track $s25; Set-OrchOn $s25
+$r = Invoke-Hook (PsJson 'Set-Content -LiteralPath a.ps1 -Value x' $s25)
+Check '25 flag on Set-Content -LiteralPath ps1 refused' ($r.code -eq 2) "code=$($r.code)"
+
+# 26. flag on, sed -i on a .py target -> 2
+$s26 = NewSid '26'; Track $s26; Set-OrchOn $s26
+$r = Invoke-Hook (BashJson "sed -i 's/a/b/' a.py" $s26)
+Check '26 flag on sed -i py target refused' ($r.code -eq 2) "code=$($r.code)"
+
+# 27. flag on, heredoc redirected to .md (non-code) -> 0
+$s27 = NewSid '27'; Track $s27; Set-OrchOn $s27
+$r = Invoke-Hook (BashJson "cat <<'EOF' > notes.md" $s27)
+Check '27 flag on heredoc redirect to md passes' ($r.code -eq 0) "code=$($r.code)"
 
 Write-Output "---- $pass passed, $fail failed ----"
 
