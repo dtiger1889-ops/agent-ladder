@@ -51,7 +51,14 @@ function Test-InvokesCodex([string]$cmd, [ref]$probeOnly) {
     if ([string]::IsNullOrWhiteSpace($cmd)) { return $false }
     $found = $false
     $allProbes = $true
-    foreach ($seg in ($cmd -split '(\|\||&&|;|&|\||\r|\n)')) {
+    # Blank out quoted spans (length preserved) BEFORE splitting on shell separators, so pipes/
+    # semicolons INSIDE quotes -- e.g. the alternation in a grep pattern "a|b/codex" -- cannot break
+    # the line into phantom segments. Without this a quoted token ending in "/codex" was misread as a
+    # codex invocation and the handoff was wrongly blocked. Real launches (codex ..., & $codex exec)
+    # sit OUTSIDE quotes and survive the blanking.
+    $masked = [regex]::Replace($cmd, '"[^"]*"', { param($m) ' ' * $m.Value.Length })
+    $masked = [regex]::Replace($masked, "'[^']*'", { param($m) ' ' * $m.Value.Length })
+    foreach ($seg in ($masked -split '(\|\||&&|;|&|\||\r|\n)')) {
         $s = $seg.Trim()
         if ([string]::IsNullOrWhiteSpace($s)) { continue }
         # strip a leading call operator, leading env assignments, and opening quote/paren

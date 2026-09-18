@@ -134,6 +134,15 @@ foreach ($cmd in @('grep -rn "codex exec" C:/work/project',
     Check "8 mention is not invocation: $($cmd.Substring(0,[Math]::Min(28,$cmd.Length)))" ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.err)) "code=$($r.code) err=$(Snip $r.err)"
 }
 
+# 8c. a QUOTED pattern whose alternation/path ends in a "/codex" leaf must NOT be gated -- the pipes
+#     live inside quotes, so they must not split the line into a phantom 'codex' segment.
+$s8c = "$run-8c"
+foreach ($cmd in @('grep -rniE "alpha|team/codex" C:/work/project',
+        'git ls-files | xargs grep -inE "foo|bar/codex"')) {
+    $r = Invoke-Hook (Bash-Json $cmd $s8c) $rootHot
+    Check "8c quoted /codex pattern not gated: $($cmd.Substring(0,[Math]::Min(24,$cmd.Length)))" ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.err)) "code=$($r.code) err=$(Snip $r.err)"
+}
+
 # 9. the notes' documented shim shape (stdin pipe + call operator + $codex variable) is caught
 $s9 = "$run-9"
 $r = Invoke-Hook (Bash-Json '"spec" | & $codex exec --skip-git-repo-check -s workspace-write -C hintforge_dev "port the reader"' $s9) $rootHot
