@@ -8,9 +8,9 @@ The central rule is simple: route by the shape and weight of the work, not by th
 
 ## Tune it to your subscriptions
 
-Use more of the pool you have room in and protect the one you need for later. Provider preferences, weekly and short-window reserves, and per-delegation spending caps are configuration values, not assumptions baked into the ladder. Change them when your subscriptions or priorities change; no routing-code rewrite is needed.
+Use more of the pool you have room in and protect the one you need for later. The per-window limits are configuration values, not assumptions baked into the ladder — change them when your subscriptions or priorities change; no routing-code rewrite is needed.
 
-The optional budget module checks fresh usage and a request-specific cost estimate before a handoff. Missing data does not mean unlimited capacity. The public configuration starts unconfigured and contains no personal subscription data. See [subscription-routing.md](subscription-routing.md) for the profile format, setup, and current adapter coverage.
+The live Codex gate (`hooks/codex_window_gate.ps1`) reads Codex's own usage snapshot and blocks a handoff when a window is over its configured used-percent limit; it fails open (advises, never blocks) when usage can't be read. A separate, optional evaluator (`hooks/subscription_budget.ps1`) offers a stricter, fail-closed estimate-based check for callers who want it. The public configuration starts unconfigured and contains no personal subscription data. See [subscription-routing.md](subscription-routing.md) for both, the profile format, and setup.
 
 ## The ladder
 

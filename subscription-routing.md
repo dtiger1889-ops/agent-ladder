@@ -1,30 +1,38 @@
-# Subscription budget preflight — module contract
+# Subscription-aware routing — protecting a scarce provider pool
 
-A provider-neutral check: does a fresh usage snapshot plus a caller-supplied cost estimate clear a
-configurable policy's thresholds for one named provider? It is a preflight, not a cost-write veto —
-it never blocks writing code, only a specific automatic handoff to a specific provider.
+This repo ships two independent pieces for keeping an automatic handoff from burning a subscription
+pool you need later. Both are preflights, not cost-write vetoes — neither ever blocks writing code,
+only a specific automatic handoff to a specific provider:
 
-Two independent gates exist in this repo and both must pass before an automatic handoff proceeds:
-the core agent-ladder policy (model choice, delegation cost gate; documented elsewhere in this repo)
-and this subscription budget preflight. Neither substitutes for the other.
-
-**Scope of the shipped adapter:** `hooks/codex_window_gate.ps1` intercepts Claude-side Codex
-launches only — a Bash/PowerShell command that invokes the `codex` binary, or an `Agent` tool call
-whose `subagent_type` names codex. Other providers and other runtimes (Codex's own hooks, a
-standalone script, a CI job) call `subscription_budget.ps1` directly; nothing here pretends to
-intercept launches it cannot see.
+1. **The live Codex gate (`hooks/codex_window_gate.ps1`) — a threshold gate.** This is the one wired
+   into a Claude Code `PreToolUse` hook. It fires when a Bash/PowerShell command actually invokes the
+   `codex` binary, or when an `Agent` call's `subagent_type` names codex, reads Codex's own
+   rate-limit snapshot (from its rollout logs), and blocks the handoff (exit 2) when a window is over
+   its configured used-percent limit. It **fails open** on unknown usage — a once-per-session
+   advisory, never a block — and never reads a caller estimate. This is the simple, recommended path.
+2. **The optional estimate-based evaluator (`hooks/subscription_budget.ps1`) — provider-neutral.**
+   A stricter check for callers who want it: does a fresh usage snapshot plus a caller-supplied cost
+   estimate clear a configurable policy for one named provider? It **fails closed** on missing data,
+   so it needs a usage feeder and a per-request estimate. The Codex gate does NOT use it; other
+   providers or runtimes (a standalone script, a CI job) can call it directly.
 
 ## Files
 
-- `hooks/subscription_budget.ps1` — the evaluator. Dot-source it for the
-  `Get-SubscriptionBudgetDecision` function, or run it as a CLI.
-- `hooks/codex_window_gate.ps1` — the one adapter that wires the evaluator into a Claude Code
-  `PreToolUse` hook for Codex launches.
+- `hooks/codex_window_gate.ps1` — the live threshold gate (above). Reads Codex's rollout logs; reads
+  its per-window limits from the policy file (see below); depends on nothing else.
+- `hooks/subscription_budget.ps1` — the optional provider-neutral estimate evaluator. Dot-source it
+  for the `Get-SubscriptionBudgetDecision` function, or run it as a CLI. Not on the Codex gate's path.
 - `config/agent-ladder-policy.template.json` — unconfigured, public-safe policy template. Copy it,
   fill in real values, keep the copy private (it will carry account-specific thresholds).
 
-Both `.ps1` files must be deployed side by side — `codex_window_gate.ps1` dot-sources
-`subscription_budget.ps1` from its own directory (`$PSScriptRoot`).
+### The Codex gate's thresholds (tunable)
+
+The gate reads `providers.openai.windows.<fiveHour|weekly>.maxUsedPercent` from a policy JSON — by
+default `agent-ladder-policy.json` beside the hook, override with env `AGENT_LADDER_POLICY_PATH`. It
+blocks when that window's `used_percent` exceeds the number. Edit those numbers to tune it. If the
+file is missing or unreadable it keeps safe built-in defaults (5-hour 70, weekly 75) and still gates.
+The remaining policy fields below (`minRemainingBefore`, `reserveAfter`, `maxJobPercentPoints`,
+freshness bounds) drive the optional evaluator, not the Codex gate.
 
 ## Policy schema (per provider key, e.g. `anthropic`, `openai`)
 
@@ -113,40 +121,44 @@ against a snapshot the caller supplied. A long-running or high-fan-out job shoul
 bounded steps (e.g. before each new Codex handoff), not assume one green check covers everything
 that follows.
 
-## Codex adapter specifics (`codex_window_gate.ps1`)
+## Codex gate specifics (`codex_window_gate.ps1`)
 
-- Provider key used: `openai`.
-- Classifies a Bash/PowerShell command as a Codex launch by the same "invokes the codex binary,
-  ignores mentions of it in text/paths" logic as the original hook; a cheap probe (`--version`,
-  `--help`, `login status`) is exempt and never evaluated.
+The live gate is the threshold gate, not the estimate evaluator above.
+
+- Provider windows read: `openai` → `fiveHour` and `weekly` `maxUsedPercent` (see "The Codex gate's
+  thresholds" near the top).
+- Classifies a Bash/PowerShell command as a Codex launch when it invokes the `codex` binary (or the
+  documented `"<stdin>" | & $codex exec ...` shim shape), ignoring mere mentions of "codex" in text
+  or paths; a cheap probe (`--version`, `--help`, `login status`) is exempt and never evaluated.
 - Classifies an `Agent` tool call as a Codex launch when `subagent_type` matches `codex` (case
   insensitive).
-- Exact request hash: lowercase SHA256 (UTF8) of the shell command line, or of
-  `"<subagent_type>\n<prompt>"` for an Agent call. A decline names this exact hash so the calling
-  agent can write a scoped estimate file with a matching `requestHash` and retry.
-- Default paths (each overridable by env var for tests or a portable install):
-  - policy: sibling `agent-ladder-policy.json` (`AGENT_LADDER_POLICY_PATH`)
-  - usage: sibling `agent-ladder-usage.json` (`AGENT_LADDER_USAGE_PATH`)
-  - estimate: `$env:TEMP/agent_ladder_estimates/<sanitized session id>.json`
-    (`AGENT_LADDER_ESTIMATE_PATH`)
-- No prompt word waives this check — there is no keyword bypass anywhere in the adapter or the
-  evaluator. Owner-directed work is handled by the owner supplying a matching, fresh usage/estimate
-  pair (or running the work outside this adapter's reach); the hook itself has no silent override.
-- Failure modes: a parse/input error before classification (garbage stdin, an unrelated tool) fails
-  open — exit 0, nothing blocked. Once a launch is classified as a real (non-probe) Codex handoff,
-  any failure from that point on — missing policy, corrupt policy, missing/stale usage, missing or
-  mismatched estimate — declines (exit 2). Unrelated tools are never evaluated at all.
+- Usage source: Codex's own rollout logs under `~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl`
+  (env `CODEX_WINDOW_GATE_SESSIONS` overrides the root for tests). It reads the newest snapshot whose
+  window has not already reset; a window past its reset reads as unknown, never as freshly-zero.
+- Decision: blocks (exit 2) only on a KNOWN breach — a window whose live `used_percent` exceeds its
+  configured `maxUsedPercent`. Unknown usage (no readable snapshot, or every window already reset)
+  never blocks: it prints a once-per-session advisory and exits 0. An unrelated tool, and a
+  parse/input error before classification, are never evaluated (exit 0).
+- No prompt word waives it — there is no keyword bypass. To proceed anyway the user runs the work on
+  the other agent, waits for the window to reset, or raises the limit in the policy file.
 
 ## Setup
 
-1. Copy `config/agent-ladder-policy.template.json` to a private path (e.g. beside the deployed hook),
-   fill in `enabled`, `profileRevision`, and real window thresholds per provider.
+**The Codex gate (recommended):**
+1. Put `codex_window_gate.ps1` in your hooks directory and register it as a `PreToolUse` hook for
+   `Bash`, `PowerShell`, and `Agent`.
+2. Optionally drop an `agent-ladder-policy.json` beside it (copy the template) and set
+   `providers.openai.windows.fiveHour.maxUsedPercent` / `weekly.maxUsedPercent`. Without the file it
+   uses safe defaults (5-hour 70, weekly 75).
+
+**The optional estimate evaluator (only if you want the stricter, fail-closed check):**
+1. Copy `config/agent-ladder-policy.template.json` to a private path and fill in `enabled`,
+   `profileRevision`, and real window thresholds per provider.
 2. Point a usage-refresh mechanism (not shipped here) at writing a fresh, normalized usage snapshot
-   to the path `AGENT_LADDER_USAGE_PATH` names, at least as often as `maxUsageAgeMinutes`.
-3. Have the calling agent write an estimate JSON with a matching `requestHash` before a Codex handoff
-   it expects to pass, or accept the decline and run the work elsewhere.
-4. Deploy `subscription_budget.ps1` and `codex_window_gate.ps1` together and wire the `PreToolUse`
-   registration for `Bash`, `PowerShell`, and `Agent`.
+   to `AGENT_LADDER_USAGE_PATH`, at least as often as `maxUsageAgeMinutes`.
+3. Have the calling agent write an estimate JSON with a matching `requestHash` before a handoff it
+   expects to pass, or accept the decline. Deploy `subscription_budget.ps1` where your caller can
+   dot-source or invoke it.
 
 ## Testing
 

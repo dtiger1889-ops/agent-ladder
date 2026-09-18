@@ -1,200 +1,190 @@
-# Wrapper tests for the codex_window_gate.ps1 adapter -- runs it exactly as Claude Code
-# would (powershell.exe -NoProfile -ExecutionPolicy Bypass -File codex_window_gate.ps1, JSON on
-# stdin) and checks exit code + output. All policy/usage/estimate fixtures are synthetic, normalized
-# JSON written under a generated TEMP child and pointed at via the AGENT_LADDER_* env overrides, so
-# this never reads or mutates any real policy/usage state.
-# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File codex_window_gate_tests.ps1
+# Wrapper tests for the codex_window_gate.ps1 threshold gate -- runs it exactly as Claude Code does
+# (powershell.exe -NoProfile -ExecutionPolicy Bypass -File <hook>, JSON on stdin) and checks exit code + output.
+# Fake rollout logs are built under $env:TEMP and pointed at with CODEX_WINDOW_GATE_SESSIONS, and a fake
+# tunable policy is pointed at with AGENT_LADDER_POLICY_PATH, so the tests never read the real
+# ~/.codex/sessions, never touch real usage state, and never depend on the deployed policy file.
+# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File codex_window_gate_tests.ps1 [-Hook <path>]
 
-$hook = Join-Path $PSScriptRoot '../hooks/codex_window_gate.ps1'
+param(
+    [string]$Hook = (Join-Path $PSScriptRoot '../hooks/codex_window_gate.ps1')
+)
+$hook = $Hook
 $run = 'cwg-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-$root = Join-Path $env:TEMP "cwg_tests_$run"
-New-Item -ItemType Directory -Path $root -Force | Out-Null
+$flagDir = Join-Path $env:TEMP 'claude_codex_window_gate'
 
-$pass = 0; $fail = 0
-function Check([string]$name, [bool]$ok, [string]$detail = '') {
-    if ($ok) { $script:pass++; Write-Output "PASS  $name" } else { $script:fail++; Write-Output "FAIL  $name  $detail" }
+# --- fake rollout roots -------------------------------------------------------
+$soon = [int64][System.DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 3600
+$past = [int64][System.DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - 3600
+function New-Rollout([string]$root, [double]$p, [int64]$pr, [double]$s, [int64]$sr) {
+    $dir = Join-Path $root '2026\09\09'
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $line = '{"type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":' +
+    $p + ',"window_minutes":300,"resets_at":' + $pr + '},"secondary":{"used_percent":' + $s +
+    ',"window_minutes":10080,"resets_at":' + $sr + '},"plan_type":"plus"}}}'
+    Set-Content -LiteralPath (Join-Path $dir 'rollout-2026-09-09T01-00-00-test.jsonl') -Value $line -Encoding UTF8
+    return $root
 }
-function Snip([string]$t) { if ($t) { $t.Substring(0, [Math]::Min(220, $t.Length)) } else { '' } }
-
-function Save-Json($obj, [string]$path) {
-    ($obj | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $path -Encoding UTF8
-    $path
-}
-function Save-JsonQuiet($obj, [string]$path) {
-    ($obj | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $path -Encoding UTF8
-}
-function Get-Sha256Hex([string]$text) {
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($text)
-        -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') })
+# Fake tunable policy files (only the fields the gate reads: openai window maxUsedPercent).
+function New-Config([string]$path, $fiveH, $week) {
+    $obj = @{ version = 1; providers = @{ openai = @{ windows = @{
+                    fiveHour = @{ maxUsedPercent = $fiveH }
+                    weekly   = @{ maxUsedPercent = $week }
+                }
+            }
+        }
     }
-    finally { $sha.Dispose() }
+    ($obj | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $path -Encoding UTF8
+    return $path
 }
+$rootOk = New-Rollout (Join-Path $env:TEMP "cwg_ok_$run") 10.0 $soon 2.0 $soon
+$rootHot = New-Rollout (Join-Path $env:TEMP "cwg_hot_$run") 92.0 $soon 46.0 $soon
+$rootWeek = New-Rollout (Join-Path $env:TEMP "cwg_week_$run") 5.0 $soon 91.0 $soon
+$rootWeek70 = New-Rollout (Join-Path $env:TEMP "cwg_week70_$run") 5.0 $soon 70.0 $soon
+$rootWeek75 = New-Rollout (Join-Path $env:TEMP "cwg_week75_$run") 5.0 $soon 75.0 $soon
+$rootStale = New-Rollout (Join-Path $env:TEMP "cwg_stale_$run") 99.0 $past 99.0 $past
+$rootEmpty = Join-Path $env:TEMP "cwg_empty_$run"
+New-Item -ItemType Directory -Path $rootEmpty -Force | Out-Null
 
-function Bash-Json([string]$cmd, [string]$s) {
-    return (@{ hook_event_name = 'PreToolUse'; tool_name = 'Bash'; session_id = $s
-            cwd = 'C:\work\project'; tool_input = @{ command = $cmd }
-        } | ConvertTo-Json -Compress)
-}
-function Agent-Json([string]$sub, [string]$prompt, [string]$s) {
-    return (@{ hook_event_name = 'PreToolUse'; tool_name = 'Agent'; session_id = $s
-            cwd = 'C:\work\project'; tool_input = @{ subagent_type = $sub; prompt = $prompt }
-        } | ConvertTo-Json -Compress)
-}
+# Default policy for most tests: the shipped defaults, 5-hour 70 / weekly 75.
+$cfgDir = Join-Path $env:TEMP "cwg_cfg_$run"
+New-Item -ItemType Directory -Path $cfgDir -Force | Out-Null
+$defaultPolicy = New-Config (Join-Path $cfgDir 'default.json') 70 75
+$missingPolicy = Join-Path $cfgDir 'does-not-exist.json'
 
-function Invoke-Hook([string]$json, [hashtable]$envOverrides = @{}) {
+function Invoke-Hook([string]$json, [string]$sessionsRoot, [string]$policyPath = $defaultPolicy) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'powershell.exe'
     $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$hook`""
     $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     $psi.UseShellExecute = $false
-    foreach ($k in $envOverrides.Keys) { $psi.EnvironmentVariables[$k] = $envOverrides[$k] }
+    $psi.EnvironmentVariables['CODEX_WINDOW_GATE_SESSIONS'] = $sessionsRoot
+    $psi.EnvironmentVariables['AGENT_LADDER_POLICY_PATH'] = $policyPath
     $p = [System.Diagnostics.Process]::Start($psi)
     $p.StandardInput.Write($json); $p.StandardInput.Close()
     $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); $p.WaitForExit()
     return @{ code = $p.ExitCode; out = $out; err = $err }
 }
-
-# --- shared fixtures: a policy/usage pair that clears every threshold comfortably ---------------
-$now = [DateTime]::UtcNow
-$nowIso = $now.ToString('o')
-$futureReset = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 3600
-
-$goodPolicy = @{
-    version       = 1
-    priorityOrder = @('openai')
-    providers     = @{
-        openai = @{
-            enabled                = $true
-            profileRevision        = 'rev-test'
-            maxUsageAgeMinutes     = 5
-            maxEstimateAgeMinutes  = 1440
-            windows                = @{
-                fiveHour = @{ windowDurationMins = 300; minRemainingBefore = 10; reserveAfter = 5; maxJobPercentPoints = 20 }
-                weekly   = @{ windowDurationMins = 10080; minRemainingBefore = 20; reserveAfter = 10; maxJobPercentPoints = 40 }
-            }
-        }
-    }
+function Bash-Json([string]$cmd, [string]$s) {
+    return (@{ hook_event_name = 'PreToolUse'; tool_name = 'Bash'; session_id = $s
+            cwd = 'C:\work\project'; tool_input = @{ command = $cmd }
+        } | ConvertTo-Json -Compress)
 }
-$goodUsage = @{
-    provider        = 'openai'
-    profileRevision = 'rev-test'
-    observedAt      = $nowIso
-    source          = 'test-fixture'
-    windows         = @{
-        fiveHour = @{ usedPercent = 20; windowDurationMins = 300; resetsAt = $futureReset }
-        weekly   = @{ usedPercent = 30; windowDurationMins = 10080; resetsAt = $futureReset }
-    }
+function Agent-Json([string]$sub, [string]$s) {
+    return (@{ hook_event_name = 'PreToolUse'; tool_name = 'Agent'; session_id = $s
+            cwd = 'C:\work\project'; tool_input = @{ subagent_type = $sub; prompt = 'do a thing' }
+        } | ConvertTo-Json -Compress)
 }
 
-$policyPath = Save-Json $goodPolicy (Join-Path $root 'policy.json')
-$usagePath = Save-Json $goodUsage (Join-Path $root 'usage.json')
-$estimateDir = Join-Path $root 'estimates'
-New-Item -ItemType Directory -Path $estimateDir -Force | Out-Null
+$pass = 0; $fail = 0
+function Check([string]$name, [bool]$ok, [string]$detail = '') {
+    if ($ok) { $script:pass++; Write-Output "PASS  $name" } else { $script:fail++; Write-Output "FAIL  $name  $detail" }
+}
+function Snip([string]$t) { if ($t) { $t.Substring(0, [Math]::Min(120, $t.Length)) } else { '' } }
 
-$baseEnv = @{ AGENT_LADDER_POLICY_PATH = $policyPath; AGENT_LADDER_USAGE_PATH = $usagePath }
-
-# 1. Classified launch, no estimate file present at all -> declined, names the expected hash
+# 1. 5-hour window over the limit -> blocked
 $s1 = "$run-1"
-$estPath1 = Join-Path $estimateDir "$s1.json"
-$env1 = $baseEnv + @{ AGENT_LADDER_ESTIMATE_PATH = $estPath1 }
-$cmd1 = '"go" | codex exec --skip-git-repo-check -s workspace-write -C . "audit these six files"'
-$r = Invoke-Hook (Bash-Json $cmd1 $s1) $env1
-$expectedHash1 = Get-Sha256Hex $cmd1
-Check '1 classified launch, no estimate file -> blocked (exit 2)' ($r.code -eq 2 -and $r.err -match 'BLOCKED') "code=$($r.code) err=$(Snip $r.err)"
-Check '1b decline names the exact expected request hash' ($r.err -match [regex]::Escape($expectedHash1)) "err=$(Snip $r.err)"
+$r = Invoke-Hook (Bash-Json '"go" | codex exec --skip-git-repo-check -s workspace-write -C . "audit these six files"' $s1) $rootHot
+Check '1 5-hour window over limit blocks (exit 2)' ($r.code -eq 2 -and $r.err -match 'BLOCKED') "code=$($r.code) err=$(Snip $r.err)"
 
-# 2. Classified launch with a matching, fresh estimate under threshold -> allowed
+# 2. weekly window over the limit -> blocked
 $s2 = "$run-2"
-$estPath2 = Join-Path $estimateDir "$s2.json"
-$cmd2 = 'codex exec -s workspace-write "build the thing"'
-$hash2 = Get-Sha256Hex $cmd2
-Save-JsonQuiet (@{ provider = 'openai'; profileRevision = 'rev-test'; observedAt = $nowIso; source = 'caller-upper-bound'
-        requestHash = $hash2; spendPercentPoints = @{ fiveHour = 5; weekly = 5 } }) $estPath2
-$env2 = $baseEnv + @{ AGENT_LADDER_ESTIMATE_PATH = $estPath2 }
-$r = Invoke-Hook (Bash-Json $cmd2 $s2) $env2
-Check '2 classified launch with matching fresh estimate -> allowed (exit 0)' ($r.code -eq 0 -and $r.out -match 'preflight passed') "code=$($r.code) out=$(Snip $r.out)"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "build the thing"' $s2) $rootWeek
+Check '2 weekly window over limit blocks (exit 2)' ($r.code -eq 2 -and $r.err -match '(?i)weekly window is at 91') "code=$($r.code) err=$(Snip $r.err)"
 
-# 3. Classified launch whose estimate exceeds a window cap -> declined
+# 3. both windows healthy -> allowed, one advisory on stdout, silent on the second call
 $s3 = "$run-3"
-$estPath3 = Join-Path $estimateDir "$s3.json"
-$cmd3 = 'codex exec -s workspace-write "a much bigger job"'
-$hash3 = Get-Sha256Hex $cmd3
-Save-JsonQuiet (@{ provider = 'openai'; profileRevision = 'rev-test'; observedAt = $nowIso; source = 'caller-upper-bound'
-        requestHash = $hash3; spendPercentPoints = @{ fiveHour = 99; weekly = 5 } }) $estPath3
-$env3 = $baseEnv + @{ AGENT_LADDER_ESTIMATE_PATH = $estPath3 }
-$r = Invoke-Hook (Bash-Json $cmd3 $s3) $env3
-Check '3 estimate over maxJobPercentPoints -> blocked' ($r.code -eq 2 -and $r.err -match 'maxJobPercentPoints') "code=$($r.code) err=$(Snip $r.err)"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "build the thing"' $s3) $rootOk
+Check '3 healthy windows allow (exit 0 + budget line)' ($r.code -eq 0 -and $r.out -match 'codex-window-gate' -and $r.out -match '5-hour window 10') "code=$($r.code) out=$(Snip $r.out)"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "build another thing"' $s3) $rootOk
+Check '3b second call in same session is silent' ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.out)) "out=$(Snip $r.out)"
 
-# 4. Probes are never gated, even with no policy/usage/estimate on disk
+# 4. probes are never gated, even at 92 percent
 $s4 = "$run-4"
 foreach ($probe in @('codex --version', 'codex --help', 'codex login status', 'C:\tools\bin\codex.cmd --version')) {
-    $r = Invoke-Hook (Bash-Json $probe $s4) @{ AGENT_LADDER_POLICY_PATH = (Join-Path $root 'missing-policy.json') }
+    $r = Invoke-Hook (Bash-Json $probe $s4) $rootHot
     Check "4 probe not gated: $probe" ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.out) -and [string]::IsNullOrWhiteSpace($r.err)) "code=$($r.code) err=$(Snip $r.err)"
 }
 
-# 5. Merely MENTIONING codex is not an invocation -- untouched even with no fixtures
+# 5. no readable snapshot -> once-per-session advisory, never a block
 $s5 = "$run-5"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "build the thing"' $s5) $rootEmpty
+Check '5 unreadable state advises, does not block' ($r.code -eq 0 -and $r.out -match 'both windows' -and $r.out -match 'NOT blocked') "code=$($r.code) out=$(Snip $r.out)"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "again"' $s5) $rootEmpty
+Check '5b advisory fires only once' ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.out)) "out=$(Snip $r.out)"
+
+# 6. a snapshot whose windows already reset reads as unknown, not as 99 percent
+$s6 = "$run-6"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "build the thing"' $s6) $rootStale
+Check '6 expired snapshot is unknown, not a block' ($r.code -eq 0 -and $r.out -match 'both windows') "code=$($r.code) out=$(Snip $r.out)"
+
+# 7. the codex-rescue agent is gated the same way
+$s7 = "$run-7"
+$r = Invoke-Hook (Agent-Json 'codex:codex-rescue' $s7) $rootHot
+Check '7 codex-rescue agent blocked at 92 percent' ($r.code -eq 2 -and $r.err -match 'BLOCKED') "code=$($r.code) err=$(Snip $r.err)"
+$s7b = "$run-7b"
+$r = Invoke-Hook (Agent-Json 'general-purpose' $s7b) $rootHot
+Check '7b non-codex agent untouched' ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.out)) "code=$($r.code) out=$(Snip $r.out)"
+
+# 8. merely MENTIONING codex is not an invocation
+$s8 = "$run-8"
 foreach ($cmd in @('grep -rn "codex exec" C:/work/project',
         'cat C:/work/project/codex_cli_notes.md',
         'ls C:/work/.codex/sessions')) {
-    $r = Invoke-Hook (Bash-Json $cmd $s5) @{ AGENT_LADDER_POLICY_PATH = (Join-Path $root 'missing-policy.json') }
-    Check "5 mention is not invocation: $($cmd.Substring(0,[Math]::Min(28,$cmd.Length)))" ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.err)) "code=$($r.code) err=$(Snip $r.err)"
+    $r = Invoke-Hook (Bash-Json $cmd $s8) $rootHot
+    Check "8 mention is not invocation: $($cmd.Substring(0,[Math]::Min(28,$cmd.Length)))" ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.err)) "code=$($r.code) err=$(Snip $r.err)"
 }
 
-# 6. The notes' documented shim shape (stdin pipe + call operator + $codex variable) is caught
-$s6 = "$run-6"
-$r = Invoke-Hook (Bash-Json '"spec" | & $codex exec --skip-git-repo-check -s workspace-write -C hintforge_dev "port the reader"' $s6) @{ AGENT_LADDER_POLICY_PATH = (Join-Path $root 'missing-policy.json') }
-Check '6 piped $codex exec shape is classified and blocked (no policy on disk)' ($r.code -eq 2) "code=$($r.code) err=$(Snip $r.err)"
+# 9. the notes' documented shim shape (stdin pipe + call operator + $codex variable) is caught
+$s9 = "$run-9"
+$r = Invoke-Hook (Bash-Json '"spec" | & $codex exec --skip-git-repo-check -s workspace-write -C hintforge_dev "port the reader"' $s9) $rootHot
+Check '9 piped $codex exec shape blocked' ($r.code -eq 2) "code=$($r.code) err=$(Snip $r.err)"
 
-# 7. An Agent call whose subagent_type names codex is gated the same way
-$s7 = "$run-7"
-$estPath7 = Join-Path $estimateDir "$s7.json"
-$prompt7 = 'do a thing'
-$hash7 = Get-Sha256Hex "codex:codex-rescue`n$prompt7"
-Save-JsonQuiet (@{ provider = 'openai'; profileRevision = 'rev-test'; observedAt = $nowIso; source = 'caller-upper-bound'
-        requestHash = $hash7; spendPercentPoints = @{ fiveHour = 5; weekly = 5 } }) $estPath7
-$env7 = $baseEnv + @{ AGENT_LADDER_ESTIMATE_PATH = $estPath7 }
-$r = Invoke-Hook (Agent-Json 'codex:codex-rescue' $prompt7 $s7) $env7
-Check '7 codex-rescue agent with matching estimate -> allowed' ($r.code -eq 0) "code=$($r.code) out=$(Snip $r.out) err=$(Snip $r.err)"
+# 10. malformed / empty stdin fails open
+$r = Invoke-Hook '' $rootHot
+Check '10 empty stdin exits 0' ($r.code -eq 0) "code=$($r.code)"
+$r = Invoke-Hook 'not json at all' $rootHot
+Check '10b garbage stdin exits 0' ($r.code -eq 0) "code=$($r.code)"
 
-# 7b. A non-codex agent is never touched
-$s7b = "$run-7b"
-$r = Invoke-Hook (Agent-Json 'general-purpose' 'do a thing' $s7b) @{ AGENT_LADDER_POLICY_PATH = (Join-Path $root 'missing-policy.json') }
-Check '7b non-codex agent untouched' ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.out) -and [string]::IsNullOrWhiteSpace($r.err)) "code=$($r.code)"
+# 11. an unrelated tool is never touched
+$r = Invoke-Hook (@{ hook_event_name = 'PreToolUse'; tool_name = 'Read'; session_id = "$run-11"; tool_input = @{ file_path = 'C:\x\codex.md' } } | ConvertTo-Json -Compress) $rootHot
+Check '11 Read tool untouched' ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.out)) "code=$($r.code)"
 
-# 8. Malformed / empty stdin: unknown classification fails open
-$r = Invoke-Hook '' @{ AGENT_LADDER_POLICY_PATH = (Join-Path $root 'missing-policy.json') }
-Check '8 empty stdin exits 0' ($r.code -eq 0) "code=$($r.code)"
-$r = Invoke-Hook 'not json at all' @{ AGENT_LADDER_POLICY_PATH = (Join-Path $root 'missing-policy.json') }
-Check '8b garbage stdin exits 0' ($r.code -eq 0) "code=$($r.code)"
+# --- tunable-threshold coverage (the config-driven "new system") --------------
 
-# 9. An unrelated tool is never touched
-$r = Invoke-Hook (@{ hook_event_name = 'PreToolUse'; tool_name = 'Read'; session_id = "$run-9"; tool_input = @{ file_path = 'C:\x\codex.md' } } | ConvertTo-Json -Compress) @{}
-Check '9 Read tool untouched' ($r.code -eq 0 -and [string]::IsNullOrWhiteSpace($r.out)) "code=$($r.code)"
+# 12. weekly at 70 is under the shipped 75 limit -> allowed (a 65-70% weekly window still lets Codex
+#     through, where an over-tight limit would have blocked it)
+$s12 = "$run-12"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "small job"' $s12) $rootWeek70
+Check '12 weekly 70 under default-75 limit allows' ($r.code -eq 0 -and $r.out -match 'weekly window 70') "code=$($r.code) out=$(Snip $r.out)"
 
-# 10. Missing/corrupt policy file declines only the classified handoff -- request hash still named
-$s10 = "$run-10"
-$cmd10 = 'codex exec -s workspace-write "another job"'
-Set-Content -LiteralPath (Join-Path $root 'corrupt-policy.json') -Value 'not { json' -Encoding UTF8
-$r = Invoke-Hook (Bash-Json $cmd10 $s10) @{ AGENT_LADDER_POLICY_PATH = (Join-Path $root 'corrupt-policy.json') }
-Check '10 corrupt policy declines the classified handoff' ($r.code -eq 2 -and $r.err -match 'BLOCKED') "code=$($r.code) err=$(Snip $r.err)"
+# 13. weekly exactly at the limit is not a breach (strictly-greater test)
+$s13 = "$run-13"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "small job"' $s13) $rootWeek75
+Check '13 weekly exactly at 75 is not blocked' ($r.code -eq 0) "code=$($r.code) err=$(Snip $r.err)"
 
-# 11. requestHash in the estimate file does not match this exact request -> declined
-$s11 = "$run-11"
-$estPath11 = Join-Path $estimateDir "$s11.json"
-$cmd11 = 'codex exec -s workspace-write "yet another job"'
-Save-JsonQuiet (@{ provider = 'openai'; profileRevision = 'rev-test'; observedAt = $nowIso; source = 'caller-upper-bound'
-        requestHash = 'stale-hash-from-a-different-request'; spendPercentPoints = @{ fiveHour = 5; weekly = 5 } }) $estPath11
-$env11 = $baseEnv + @{ AGENT_LADDER_ESTIMATE_PATH = $estPath11 }
-$r = Invoke-Hook (Bash-Json $cmd11 $s11) $env11
-Check '11 estimate requestHash mismatch -> declined' ($r.code -eq 2 -and $r.err -match 'requestHash does not match') "code=$($r.code) err=$(Snip $r.err)"
+# 14. LOWERING the weekly limit via config blocks a snapshot that the default would allow
+$s14 = "$run-14"
+$cfgTight = New-Config (Join-Path $cfgDir 'tight.json') 70 60
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "small job"' $s14) $rootWeek70 $cfgTight
+Check '14 config weekly=60 blocks a 70 percent weekly window' ($r.code -eq 2 -and $r.err -match 'BLOCKED') "code=$($r.code) err=$(Snip $r.err)"
 
-# --- cleanup: only this run's generated TEMP child ------------------------------------------------
-Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-$stillThere = Test-Path -LiteralPath $root
-Check '12 cleanup removed only the generated TEMP child' (-not $stillThere) "root=$root"
+# 15. RAISING the 5-hour limit via config lets a snapshot through that the default would block
+$s15 = "$run-15"
+$cfgLoose = New-Config (Join-Path $cfgDir 'loose.json') 95 75
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "small job"' $s15) $rootHot $cfgLoose
+Check '15 config 5-hour=95 allows a 92 percent 5-hour window' ($r.code -eq 0) "code=$($r.code) err=$(Snip $r.err)"
+
+# 16. a missing config file falls back to the safe defaults (5-hour 70) and still gates
+$s16 = "$run-16"
+$r = Invoke-Hook (Bash-Json 'codex exec -s workspace-write "small job"' $s16) $rootHot $missingPolicy
+Check '16 missing config keeps default limits and still blocks' ($r.code -eq 2 -and $r.err -match 'BLOCKED') "code=$($r.code) err=$(Snip $r.err)"
+
+# --- cleanup ------------------------------------------------------------------
+foreach ($d in @($rootOk, $rootHot, $rootWeek, $rootWeek70, $rootWeek75, $rootStale, $rootEmpty, $cfgDir)) {
+    Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
+}
+Get-ChildItem -LiteralPath $flagDir -File -ErrorAction SilentlyContinue |
+Where-Object { $_.Name -like "$run*" } | Remove-Item -Force -ErrorAction SilentlyContinue
 
 Write-Output ''
 Write-Output "codex_window_gate: $pass passed, $fail failed"
