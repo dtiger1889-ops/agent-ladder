@@ -13,6 +13,8 @@ Ask whether doing the work inline would likely exceed the context and effort req
 - A handful of commands, one configuration change, one status check, or a small edit stays inline.
 - A full test suite, large mechanical migration, broad file sweep, or multi-step website interaction may justify delegation.
 
+Evaluate the remaining whole ask, then each proposed package. Include briefing, worker startup/context, execution, review, integration, and likely rework; prefer reusing a suitable worker over another cold start. Already-spent effort and code-line counts do not establish that a handoff will save tokens. The optional hooks provide reminders, never a prohibition on inline work. No numerical savings are claimed without measurement.
+
 This gate outranks the task category. A task being “mechanical” is not enough by itself.
 
 ### 2. Keep judgment work with the owner

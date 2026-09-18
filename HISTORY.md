@@ -153,6 +153,14 @@ tier was on duty in the session that did the work.
   hooks.
 - The four hooks and their wrapper tests are in `hooks/` and `tests/`.
 
+## Correcting over-enforcement (2026-09-18, later)
+
+The owner questioned whether the implementation served token efficiency. The audit found that relaxing the veto first to two lines and then forty had left its underlying error intact: a one-line new file was blocked, a read-only Python heredoc was misclassified as a write, and a question or explicit negation could turn the restriction on. Worker output was also counted as inline work. Passing wrapper tests had confirmed the restriction, not its economic value.
+
+The owner authorized delegated fixes. The automatic veto and shell detector were removed; line volume now supplies a nonblocking reminder to compare the whole remaining ask and each package against total handoff costs. Explicit ON is a preference, OFF persists, and only whole-prompt commands change state. Workers are excluded before state mutation. Pre/post reminders share one atomic session marker and return structured additional context without a permission decision. Model naming and review requirements remain.
+
+The earlier explanation that shared hook entries caused lost exit-2 feedback was plausible transcript analysis, not a controlled runtime result. Current reminders use the documented exit-zero `additionalContext` channel instead; see the [hooks reference](https://code.claude.com/docs/en/hooks#add-context-for-claude). Regression checks establish these behaviors, not measured net token savings.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and

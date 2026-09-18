@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "priorityOrder": ["anthropic", "openai"],
+  "providers": {
+    "anthropic": {
+      "enabled": false,
+      "profileRevision": "",
+      "maxUsageAgeMinutes": 5,
+      "maxEstimateAgeMinutes": 1440,
+      "windows": {
+        "fiveHour": {
+          "windowDurationMins": 300,
+          "minRemainingBefore": null,
+          "reserveAfter": null,
+          "maxJobPercentPoints": null
+        },
+        "weekly": {
+          "windowDurationMins": 10080,
+          "minRemainingBefore": null,
+          "reserveAfter": null,
+          "maxJobPercentPoints": null
+        }
+      }
+    },
+    "openai": {
+      "enabled": false,
+      "profileRevision": "",
+      "maxUsageAgeMinutes": 5,
+      "maxEstimateAgeMinutes": 1440,
+      "windows": {
+        "fiveHour": {
+          "windowDurationMins": 300,
+          "minRemainingBefore": null,
+          "reserveAfter": null,
+          "maxJobPercentPoints": null
+        },
+        "weekly": {
+          "windowDurationMins": 10080,
+          "minRemainingBefore": null,
+          "reserveAfter": null,
+          "maxJobPercentPoints": null
+        }
+      }
+    }
+  }
+}

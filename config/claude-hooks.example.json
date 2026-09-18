@@ -1,5 +1,5 @@
 {
-  "_readme": "Merge these entries into your user-level Claude Code settings. Replace C:\\path\\to\\agent-ladder with the actual checkout path. The hook scripts fail open. Blocking hooks: grill_gate blocks one ungrilled build write; model_gate refuses every sub-agent spawn with no model or with haiku; orchestrator_mode refuses main-session code writes only while the per-session mode is on (set by orchestrate_flag from your prompt, or automatically once delegation_gate's counter reaches 150 inline code lines). The other hooks are reminders. Keep delegation_gate in its OWN PostToolUse entry: when several hooks in one entry exit 2 on the same call, only one message reaches the model.",
+  "_readme": "Merge these entries into user-level Claude Code settings and replace the checkout path. Model and grill gates retain their documented blocking behavior. Orchestration hooks are nonblocking cost reminders: explicit mode commands set a preference; code volume never enables a veto. Pre/post volume reminders share one session marker, exempt workers, and respect explicit OFF. additionalContext carries the reminder without overriding permission decisions.",
   "hooks": {
     "UserPromptSubmit": [
       {

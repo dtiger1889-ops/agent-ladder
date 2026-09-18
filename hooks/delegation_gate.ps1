@@ -1,38 +1,6 @@
 #requires -Version 5.1
-# PostToolUse (Write|Edit|MultiEdit, and Bash|PowerShell): the cost gate for delegation, made mechanical.
-# the workspace instructions "Sub-agent & model routing": the trigger for handing work to a sub-agent is
-# TOKEN WEIGHT ("would inline cost more than ~30-40k tokens?"), not the task noun. That rule was
-# prose only; on 2026-09-02 a build session wrote a multi-thousand-line build inline
-# until the owner said "offload segmented work to sub agents" (private lapse ledger row 27). This hook
-# counts code lines the session has written and, ONCE, past the threshold, exits 2 with a reminder.
-# It never blocks the edit that fired it. Fails open. Threshold: 600 lines of code across the session.
-#
-# Part A diagnosis (2026-09-18, package P5): the audit (HISTORY.md (2026-09-18 audit)
-# section 3) found sessions the other audited session (3,084 lines) and that session (2,691 lines) with no firing recorded
-# in their transcripts. Hand-run tests confirmed the hook itself is NOT the cause: a 700-line Write
-# fires (exit 2, correct message) both with a plain JSON payload and with the exact Desktop-app shape
-# (transcript_path under ~/.claude/projects, permission_mode "auto", tool_use_id, tool_response), and
-# $env:TEMP resolves identically under MSYS bash and a Windows
-# native powershell.exe -- ruling out a per-launcher TEMP split. One audited session's own on-disk state
-# (%TEMP%\claude_delegation_gate\<session-id>.fired, created 2026-09-14 23:10;
-# .count reached 5378 by 2026-09-16) proves the hook DID run to completion and DID exit 2 in that exact
-# session -- so counting, extension matching, and MultiEdit shape were never broken there. But that
-# session's transcript records zero hook_blocking_error entries mentioning
-# "delegation-gate": its only 10 hook_blocking_error entries are all from skill_sync.ps1, which is
-# registered ahead of delegation_gate.ps1 in the SAME settings.json PostToolUse "Write|Edit|MultiEdit"
-# matcher array (order: skill_sync.ps1, checkpoint_finisher_guard.ps1, delegation_gate.ps1). The other audited session's
-# transcript shows the same pattern one level up: its single hook_blocking_error entry is from
-# checkpoint_finisher_guard.ps1 (2nd in the array), never delegation_gate.ps1 (3rd/last); The other audited session's own
-# state files are gone because that session predates the hook's 7-day sweep window (jsonl dated 2026-09-07,
-# more than 7 days before this diagnosis), not because the hook never fired. Best-evidenced conclusion:
-# when more than one hook in that shared matcher array exits 2 on the same PostToolUse:Edit/Write call,
-# the transcript keeps only one hook's blockingError message -- and delegation_gate, listed last, is the
-# one that reliably loses that slot. The exact dedup rule inside the Claude Code hook runner was not
-# directly observable from outside; this package does not edit settings.json/register_hooks.ps1 to
-# reorder or split the matcher (out of scope per brief), so the loss condition remains live. Report this
-# finding to the owner: reordering delegation_gate first in its matcher array, or moving it to its own
-# matcher entry, is a plausible fix a future package should try.
-
+# PostToolUse: count approximate main-session code output and offer a nonblocking cost reminder.
+# 600 lines is a heuristic, not a token estimate. Shares .reminded with orchestrator_mode.
 $Threshold = 600
 $CodeExt = '\.(py|ts|tsx|js|jsx|mjs|cjs|ps1|psm1|sh|bash|cmd|bat|rs|go|java|kt|cs|c|cpp|h|hpp|rb|php|lua|sql|toml|yaml|yml|json|css|scss|html|svelte|vue)$'
 $ScratchRe = '(?i)AppData\\Local\\Temp\\claude|msys64[\\/]tmp[\\/]claude'
@@ -104,6 +72,7 @@ try {
     $raw = [Console]::In.ReadToEnd()
     if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
     $j = $raw | ConvertFrom-Json
+    if (-not [string]::IsNullOrWhiteSpace("$($j.agent_id)")) { exit 0 }
     $tool = "$($j.tool_name)"
     if ($tool -notin @('Edit', 'Write', 'MultiEdit', 'Bash', 'PowerShell')) { exit 0 }
 
@@ -146,12 +115,13 @@ try {
     }
 
     $sid = "$($j.session_id)"
-    if ([string]::IsNullOrWhiteSpace($sid)) { $sid = 'nosession' }
+    if ([string]::IsNullOrWhiteSpace($sid)) { exit 0 }
     $dir = Join-Path $env:TEMP 'claude_delegation_gate'
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
     $safe = ($sid -replace '[^A-Za-z0-9-]', '_')
     $counter = Join-Path $dir "$safe.count"
-    $fired = Join-Path $dir "$safe.fired"
+    $orchDir = Join-Path $env:TEMP 'claude_orchestrator'
+    $fired = Join-Path $orchDir "$safe.reminded"
     Get-ChildItem $dir -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item -Force -ErrorAction SilentlyContinue
 
     $total = 0
@@ -160,16 +130,12 @@ try {
     Set-Content -LiteralPath $counter -Value $total -Encoding ASCII
 
     if ($total -lt $Threshold) { exit 0 }
+    if (Test-Path -LiteralPath (Join-Path $orchDir "$safe.off")) { exit 0 }
     if (Test-Path -LiteralPath $fired) { exit 0 }
-    New-Item -ItemType File -Path $fired -Force | Out-Null
-
-    $msg = "[delegation-gate] This session has now written about $total lines of code inline (fires once; the edit went through -- do NOT retry it). " +
-    'the workspace instructions cost gate: past ~30-40k tokens of inline work the remaining build goes to sub-agents -- ' +
-    'Sonnet for mechanical/bulk, Opus/Fable for anything user-facing -- in isolated worktrees, with this session as orchestrator (seams, specs, contracts, review, merge). ' +
-    'Owner, 2026-09-02: "offload segmented work to more efficient sub agents and act as an orchestrator." ' +
-    'Continue inline ONLY if what is left is genuinely small; otherwise split the remaining work now and say so in the reply.'
-    [Console]::Error.WriteLine($msg)
-    exit 2
-} catch {
+    [void][IO.Directory]::CreateDirectory($orchDir)
+    $claim = [IO.File]::Open($fired, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $claim.Dispose()
+    $msg = "[agent-ladder] About $total weighted code lines recorded inline; this is a heuristic, not a token estimate. Compare the remaining whole ask, then each bounded package, against total handoff cost (briefing, worker context, execution, review, integration, and rework). Keep small work inline; delegate only when total cost is lower, and reuse a suitable existing worker. The completed tool call succeeded; do not retry it."
+    @{ hookSpecificOutput = @{ hookEventName = 'PostToolUse'; additionalContext = $msg } } | ConvertTo-Json -Compress -Depth 4
     exit 0
-}
+} catch { exit 0 }

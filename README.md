@@ -6,6 +6,12 @@ Use it to decide whether work should stay in the current session, move to a sub-
 
 The central rule is simple: route by the shape and weight of the work, not by the task's label.
 
+## Tune it to your subscriptions
+
+Use more of the pool you have room in and protect the one you need for later. Provider preferences, weekly and short-window reserves, and per-delegation spending caps are configuration values, not assumptions baked into the ladder. Change them when your subscriptions or priorities change; no routing-code rewrite is needed.
+
+The optional budget module checks fresh usage and a request-specific cost estimate before a handoff. Missing data does not mean unlimited capacity. The public configuration starts unconfigured and contains no personal subscription data. See [subscription-routing.md](subscription-routing.md) for the profile format, setup, and current adapter coverage.
+
 ## The ladder
 
 1. **Stay inline** for short, stateful, ambiguous, or judgment-heavy work.
@@ -23,15 +29,15 @@ See [agent-ladder.md](agent-ladder.md) for the full decision rules and source no
 The repository also includes the implementation that turns the ladder into working guardrails:
 
 - `hooks/model_gate.ps1` — refuses any sub-agent spawn that names no model or names Haiku (principle 5, every time, no state).
-- `hooks/orchestrate_flag.ps1` — turns a per-session orchestrator mode on or off from the prompt ("orchestrate", "delegate the rest", `/orchestrate on`; "go inline", `/orchestrate off`) and prints one short delegation reminder on every real prompt.
-- `hooks/orchestrator_mode.ps1` — while the mode is on, refuses code writes from the main session (files with code extensions, shell heredocs, `Set-Content`, `sed -i`); docs and the checkpoint pass; workers are exempt because their hook input carries an agent id. Also turns the mode on by itself once the delegation gate's counter reaches 150 inline code lines.
-- `hooks/delegation_gate.ps1` — counts inline code lines, including shell heredoc writes, and reminds the session to delegate once past 600. Give it its own PostToolUse entry: when several hooks in one entry exit 2 on the same call, only one message survives.
+- `hooks/orchestrate_flag.ps1` — accepts explicit whole-prompt mode commands, preserves OFF until explicit ON, and prints a short cost reminder. Questions, quotes, negations, and worker events cannot toggle preference.
+- `hooks/orchestrator_mode.ps1` — returns a nonblocking cost reminder on a write after 150 weighted lines or explicit ON. It never forbids inline edits, parses shell writes, or turns the mode on automatically.
+- `hooks/delegation_gate.ps1` — counts approximate main-session code output and provides a nonblocking fallback reminder after 600 weighted lines. Workers are excluded. Both volume hooks share one reminder per session and respect explicit OFF. Their exit-zero structured context does not override permission decisions.
 - `hooks/grill_gate.ps1` — detects build kickoffs, advises an interview, and blocks the first ungrilled build write once.
 - `hooks/checkpoint_finisher_guard.ps1` — reminds the session to verify and finish a checkpoint after editing it.
 - `scripts/finish-checkpoint.ps1` — stamps, measures, sorts, and optionally archives a checkpoint.
 - `scripts/sort_open_threads.ps1` — keeps tagged open-thread bullets in owner/agent and low/high order.
 - `scripts/verify_checkpoint_claims.ps1` — checks checkpoint paths, state claims, and routing tags.
-- `tests/*_tests.ps1` — wrapper tests for each hook (grill gate 19, model gate 7, orchestrate flag 14, orchestrator mode 13, delegation gate 8); all pass in the reference environment.
+- `tests/*_tests.ps1` — subprocess regressions with isolated state: 45 intent checks, 68 shared pre/post reminder checks, and 7 model-gate checks. The delegation-gate test entry point invokes the shared suite; do not count it twice.
 - `config/claude-hooks.example.json` — example user-level hook wiring.
 
 The three checkpoint scripts are the same files the [Claude Code Harness Toolbox](https://github.com/dtiger1889-ops/claude-harness-toolbox) ships inside its `checkpoint` skill; that repo is their home and carries the skill text that calls them. They are mirrored here so the finisher hook has something to point at.
