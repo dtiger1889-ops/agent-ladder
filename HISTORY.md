@@ -161,6 +161,18 @@ The owner authorized delegated fixes. The automatic veto and shell detector were
 
 The earlier explanation that shared hook entries caused lost exit-2 feedback was plausible transcript analysis, not a controlled runtime result. Current reminders use the documented exit-zero `additionalContext` channel instead; see the [hooks reference](https://code.claude.com/docs/en/hooks#add-context-for-claude). Regression checks establish these behaviors, not measured net token savings.
 
+## Scoping the repo back to the ladder (2026-09-18, later still)
+
+The owner reviewed this repository and found it overgrown: alongside the ladder it had accreted a
+checkpoint subsystem (a finisher-guard hook plus finish / sort / verify scripts, mirrored from the
+sibling toolbox repo so the guard had something to point at), a build-kickoff "grill" gate, and a
+subscription budget evaluator with a Codex adapter. None of that decides whether to delegate work.
+It was removed so the repo is just the ladder: the guide, this history, the four routing hooks
+(`model_gate`, `orchestrate_flag`, `orchestrator_mode`, `delegation_gate`) with their tests, and one
+example config. The checkpoint scripts live in their own repo; the subscription gate stays in the
+owner's private workspace. Earlier entries above still mention the removed pieces because they are
+the record of what was tried -- this note is why they are no longer in the tree.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and

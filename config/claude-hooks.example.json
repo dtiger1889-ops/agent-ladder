@@ -1,13 +1,9 @@
 {
-  "_readme": "Merge these entries into user-level Claude Code settings and replace the checkout path. Model and grill gates retain their documented blocking behavior. Orchestration hooks are nonblocking cost reminders: explicit mode commands set a preference; code volume never enables a veto. Pre/post volume reminders share one session marker, exempt workers, and respect explicit OFF. additionalContext carries the reminder without overriding permission decisions.",
+  "_readme": "Merge these entries into user-level Claude Code settings and replace the checkout path. The model gate retains its documented blocking behavior. The orchestration hooks are nonblocking cost reminders: explicit mode commands set a preference; code volume never enables a veto. Pre/post volume reminders share one session marker, exempt workers, and respect explicit OFF. additionalContext carries the reminder without overriding permission decisions.",
   "hooks": {
     "UserPromptSubmit": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\grill_gate.ps1\""
-          },
           {
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\orchestrate_flag.ps1\""
@@ -16,15 +12,6 @@
       }
     ],
     "PreToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\grill_gate.ps1\""
-          }
-        ]
-      },
       {
         "matcher": "Agent",
         "hooks": [
@@ -45,15 +32,6 @@
       }
     ],
     "PostToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\path\\to\\agent-ladder\\hooks\\checkpoint_finisher_guard.ps1\""
-          }
-        ]
-      },
       {
         "matcher": "Write|Edit|MultiEdit|Bash|PowerShell",
         "hooks": [
