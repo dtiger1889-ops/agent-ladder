@@ -192,6 +192,29 @@ for the ladder itself to say so, since the ladder is what a delegating session r
 the brief. Step 4 now carries one paragraph: on a git-backed repository the brief tells the worker
 to commit and push after every completed step, and nothing squashes those commits away before review.
 
+## Trimmed workers, a fixed report shape, and a per-worker budget (2026-09-22)
+
+The owner clipped two public threads on 2026-09-18, both about running the strongest model as an
+orchestrator over cheaper workers. Most of what they described the ladder already did -- the cost
+gate, a reviewer after the builder, workers returning a summary, isolated worktrees -- so only four
+ideas were new, and they went to the owner as a decision. He took three and rejected the fourth.
+
+Taken: (1) define workers as trimmed agent files with the model pinned in the definition and the
+agent-spawning and page-publishing tools removed, because a general-purpose agent carries tool
+definitions it will never use and, worse, can turn a bounded package into an unbounded one by
+spawning more agents; (2) a fixed report shape, two closing lines naming what the worker concluded
+and the evidence for it, with the calling session's own reply naming which model did which part,
+so a conclusion is checked rather than re-decided from a bare answer; (3) a hard budget per worker
+-- a maximum number of tool calls and a wall-clock limit, stated in every brief, with the worker
+stopping and reporting partial work instead of looping. Defaults set at roughly 40 calls or 15
+minutes for a small package and 120 calls or 45 minutes for a medium one. The turn cap has a real
+field in the agent definition; the wall-clock half is enforced by the brief text only.
+
+Rejected: (4) a cheapest-tier agent used purely as a test runner that trims output down to the
+failures. It is a genuine token saving, but the workspace has never routed real work to that tier
+since 2026-07-09, on intelligence grounds, and the owner declined to make the first exception for
+a saving this small.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and

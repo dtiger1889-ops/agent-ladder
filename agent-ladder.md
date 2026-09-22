@@ -51,6 +51,12 @@ The brief should state the goal, exact scope, constraints, verification command,
 
 When the worker operates on a git-backed repository, the brief also tells it to commit and push after every completed step (a draft pull request or a plain push of its own branch is enough). A usage-limit cutoff, a killed process, or a closed window then loses at most the step in progress, never the run; and nothing squashes those step commits away before review.
 
+Define workers as trimmed agent files rather than briefing a general-purpose agent each time. Pin the model in the definition instead of relying on the caller to pass one, and remove the tools a worker should never reach for — spawning further agents and publishing pages are the two that matter, because both let a bounded package quietly become an unbounded one. Keep one definition per tier: a cheaper one for mechanical packages and a stronger one for packages whose output a person will read.
+
+Fix the shape of the report. Every worker ends its report with two lines — what it concluded, and the evidence that makes it true (a command's output, a file and line, a test result). The calling session's own reply then names which model did which part of the work. Both rules exist so a conclusion can be checked rather than re-decided from a bare answer, and so nobody reading the result later has to guess which tier produced it.
+
+Give every worker a hard budget, stated in the brief: a maximum number of tool calls and a wall-clock limit. Reasonable defaults are about 40 tool calls or 15 minutes for a small package and about 120 tool calls or 45 minutes for a medium one. If the worker hits either limit it stops and reports partial work — it does not loop, and it does not retry the same failing approach again. Where the runtime supports a turn-cap field in the agent definition, set it as a backstop; a wall-clock limit usually has no such field, so it is enforced by the brief text alone.
+
 ### 5. Use a second runtime deliberately
 
 A second runtime is useful when it provides a distinct execution environment, a separate usage pool, or a better fit for spec-frozen implementation work. It is not a reason to split a small task or to avoid review.
