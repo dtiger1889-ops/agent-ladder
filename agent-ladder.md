@@ -49,6 +49,8 @@ Use a sub-agent when the task is well-bounded, repeatable, and large enough to c
 
 The brief should state the goal, exact scope, constraints, verification command, and expected output. If the agent fails twice for the same reason, take the work back into the owner session.
 
+When the worker operates on a git-backed repository, the brief also tells it to commit and push after every completed step (a draft pull request or a plain push of its own branch is enough). A usage-limit cutoff, a killed process, or a closed window then loses at most the step in progress, never the run; and nothing squashes those step commits away before review.
+
 ### 5. Use a second runtime deliberately
 
 A second runtime is useful when it provides a distinct execution environment, a separate usage pool, or a better fit for spec-frozen implementation work. It is not a reason to split a small task or to avoid review.

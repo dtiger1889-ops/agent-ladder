@@ -183,6 +183,15 @@ always explicit; any remainder other than `on`/`off`/`status` turns the preferen
 named as the task in the hook's output. Prompts that merely contain the command elsewhere
 still toggle nothing. Tests: 47 pass.
 
+## Push after every step (2026-09-22)
+
+A worker that only pushes at the end loses the whole run when the usage window closes or the
+process dies mid-task. The owner had already decided on 2026-09-09 that build agents commit per
+step and open a draft pull request after the first green step; on 2026-09-21 an inbox note asked
+for the ladder itself to say so, since the ladder is what a delegating session reads when it writes
+the brief. Step 4 now carries one paragraph: on a git-backed repository the brief tells the worker
+to commit and push after every completed step, and nothing squashes those commits away before review.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and
