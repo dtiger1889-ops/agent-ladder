@@ -173,6 +173,16 @@ example config. The checkpoint scripts live in their own repo; the subscription 
 owner's private workspace. Earlier entries above still mention the removed pieces because they are
 the record of what was tried -- this note is why they are no longer in the tree.
 
+## The task form (2026-09-21)
+
+The 2026-09-18 tightening made `orchestrate_flag` accept only the bare command and the three
+keywords. On 2026-09-21 the owner typed `/orchestrate work through the roadmap...`: the hook
+matched nothing, reported OFF, and the session announced it would work inline. The owner had
+invoked the skill precisely to get delegation. Fix: a prompt that starts with `/orchestrate` is
+always explicit; any remainder other than `on`/`off`/`status` turns the preference ON and is
+named as the task in the hook's output. Prompts that merely contain the command elsewhere
+still toggle nothing. Tests: 47 pass.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and

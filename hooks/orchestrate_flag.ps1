@@ -17,10 +17,17 @@ try {
 
     # Match the entire utterance. Do not infer intent from quoted text, questions,
     # negations, embedded commands, or incidental mentions of orchestration.
+    # A prompt that STARTS with /orchestrate is always an explicit command: bare or "on" = ON,
+    # "off"/"status" = those, and ANY other remainder = ON plus that remainder is the task to
+    # delegate. (2026-09-21: "/orchestrate work through the roadmap..." was reported OFF and the
+    # session worked inline; the owner had called the skill precisely to get delegation.)
     $intent = ''
-    if ($t -match '\A/orchestrate(?: (on|off|status))?\z') {
-        $intent = $Matches[1]
-        if (-not $intent) { $intent = 'on' }
+    $task = ''
+    if ($t -match '(?s)\A/orchestrate(?:\s+(.*))?\z') {
+        $rest = "$($Matches[1])".Trim()
+        if ($rest -match '\A(on|off|status)[?.!]*\z') { $intent = $Matches[1] }
+        elseif (-not $rest) { $intent = 'on' }
+        else { $intent = 'on'; $task = $rest }
     }
     elseif ($t -match '\A(?:orchestrate (?:this|the work)|delegate (?:this|the work))\.?\z') { $intent = 'on' }
     elseif ($t -match '\A(?:go inline|work inline|stop orchestrating|do it yourself)\.?\z') { $intent = 'off' }
@@ -43,7 +50,8 @@ try {
         else {
             Remove-Item -LiteralPath $offMarker -Force -ErrorAction SilentlyContinue
             if (-not (Test-Path -LiteralPath $flag)) { Set-Content -LiteralPath $flag -Value $nowUtc -NoNewline }
-            Write-Output '[orchestrator] routing preference ON; consider named-model workers when the handoff pays for itself; small work stays inline.'
+            if ($task) { Write-Output '[orchestrator] routing preference ON; the text after /orchestrate IS the task: brief it into bounded packages and spawn named-model workers now; only tightly coupled slivers stay inline.' }
+            else { Write-Output '[orchestrator] routing preference ON; consider named-model workers when the handoff pays for itself; small work stays inline.' }
         }
     }
 

@@ -29,17 +29,23 @@ function Reset-State {
 try {
     $r = Invoke-Hook '/orchestrate on' 'worker'
     Check 'worker cannot create state directory' ($r.code -eq 0 -and -not (Test-Path $dir) -and -not $r.out)
-    foreach ($command in @('/orchestrate','/orchestrate on','orchestrate this','orchestrate the work.','delegate this','delegate the work')) {
+    foreach ($command in @('/orchestrate','/orchestrate on','/orchestrate on please','/orchestrate work through the roadmap. phone is connected.',"/orchestrate fix the treadmill template`nthen install it",'orchestrate this','orchestrate the work.','delegate this','delegate the work')) {
         Reset-State
         $r = Invoke-Hook $command
         Check "explicit ON: $command" ($r.code -eq 0 -and (Has 'on') -and -not (Has 'off') -and $r.out -match 'routing preference ON')
     }
+    Reset-State
+    $r = Invoke-Hook '/orchestrate work through the roadmap'
+    Check 'task form names the remainder as the task' ($r.out -match 'text after /orchestrate IS the task')
+    Reset-State
+    $r = Invoke-Hook '/orchestrate status?'
+    Check 'status with trailing punctuation is still read-only' (-not (Has 'on') -and -not (Has 'off') -and $r.out -match 'routing preference OFF')
     foreach ($command in @('/orchestrate off','go inline','work inline','stop orchestrating','do it yourself.')) {
         Invoke-Hook '/orchestrate on' | Out-Null
         $r = Invoke-Hook $command
         Check "explicit OFF: $command" ($r.code -eq 0 -and (Has 'off') -and -not (Has 'on'))
     }
-    $ambiguous = @('Do not orchestrate this task.','Do not orchestrate this','Why does orchestrator mode block tiny edits?', 'Can you orchestrate this?', 'delegate this?', 'orchestrate this?', '"orchestrate this"', "'delegate this'", '`/orchestrate on`', '> /orchestrate on', 'The docs say /orchestrate on', '/orchestrate on please', "/orchestrate on`n/orchestrate off", 'orchestrate this but actually go inline', 'Do not stop orchestrating', 'Should I go inline?', 'The orchestrator failed', '/orchestrate status?')
+    $ambiguous = @('Do not orchestrate this task.','Do not orchestrate this','Why does orchestrator mode block tiny edits?', 'Can you orchestrate this?', 'delegate this?', 'orchestrate this?', '"orchestrate this"', "'delegate this'", '`/orchestrate on`', '> /orchestrate on', 'The docs say /orchestrate on', 'orchestrate this but actually go inline', 'Do not stop orchestrating', 'Should I go inline?', 'The orchestrator failed')
     foreach ($prompt in $ambiguous) {
         Reset-State
         $r = Invoke-Hook $prompt

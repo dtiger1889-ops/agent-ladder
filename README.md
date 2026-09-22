@@ -23,7 +23,7 @@ See [agent-ladder.md](agent-ladder.md) for the full decision rules and source no
 The repository also includes the implementation that turns the ladder into working guardrails:
 
 - `hooks/model_gate.ps1` — refuses any sub-agent spawn that names no model or names Haiku (principle 5, every time, no state).
-- `hooks/orchestrate_flag.ps1` — accepts explicit whole-prompt mode commands, preserves OFF until explicit ON, and prints a short cost reminder. Questions, quotes, negations, and worker events cannot toggle preference.
+- `hooks/orchestrate_flag.ps1` — accepts explicit whole-prompt mode commands (`/orchestrate`, `/orchestrate on|off|status`, or `/orchestrate <task>`, where the remainder is the task to delegate), preserves OFF until explicit ON, and prints a short cost reminder. Questions, quotes, negations, and worker events cannot toggle preference.
 - `hooks/orchestrator_mode.ps1` — returns a nonblocking cost reminder on a write after 150 weighted lines or explicit ON. It never forbids inline edits, parses shell writes, or turns the mode on automatically.
 - `hooks/delegation_gate.ps1` — counts approximate main-session code output and provides a nonblocking fallback reminder after 600 weighted lines. Workers are excluded. Both volume hooks share one reminder per session and respect explicit OFF. Their exit-zero structured context does not override permission decisions.
 - `tests/*_tests.ps1` — subprocess regressions with isolated state: 45 intent checks, 68 shared pre/post reminder checks, and 7 model-gate checks. The delegation-gate test entry point invokes the shared suite; do not count it twice.
