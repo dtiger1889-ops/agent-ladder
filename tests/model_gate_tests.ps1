@@ -1,4 +1,4 @@
-# Wrapper tests for ~/.claude/hooks/model_gate.ps1 -- runs the hook exactly as Claude Code does
+# Wrapper tests for hooks/model_gate.ps1 in this repository -- runs the hook exactly as Claude Code does
 # (powershell.exe -NoProfile -ExecutionPolicy Bypass -File <hook>, JSON on stdin) and checks exit code + output.
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File model_gate_tests.ps1
 $hook = Join-Path $PSScriptRoot '..\hooks\model_gate.ps1'

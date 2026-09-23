@@ -20,7 +20,7 @@ try {
     # A prompt that STARTS with /orchestrate is always an explicit command: bare or "on" = ON,
     # "off"/"status" = those, and ANY other remainder = ON plus that remainder is the task to
     # delegate. (2026-09-21: "/orchestrate work through the roadmap..." was reported OFF and the
-    # session worked inline; the owner had called the skill precisely to get delegation.)
+    # session worked inline; the owner had called the /orchestrate skill, now in skills/orchestrate/, precisely to get delegation.)
     $intent = ''
     $task = ''
     if ($t -match '(?s)\A/orchestrate(?:\s+(.*))?\z') {

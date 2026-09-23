@@ -165,12 +165,12 @@ The earlier explanation that shared hook entries caused lost exit-2 feedback was
 
 The owner reviewed this repository and found it overgrown: alongside the ladder it had accreted a
 checkpoint subsystem (a finisher-guard hook plus finish / sort / verify scripts, mirrored from the
-sibling toolbox repo so the guard had something to point at), a build-kickoff "grill" gate, and a
+[Claude Code Harness Toolbox](https://github.com/dtiger1889-ops/claude-harness-toolbox) so the guard had something to point at), a build-kickoff "grill" gate, and a
 subscription budget evaluator with a Codex adapter. None of that decides whether to delegate work.
 It was removed so the repo is just the ladder: the guide, this history, the four routing hooks
 (`model_gate`, `orchestrate_flag`, `orchestrator_mode`, `delegation_gate`) with their tests, and one
-example config. The checkpoint scripts live in their own repo; the subscription gate stays in the
-owner's private workspace. Earlier entries above still mention the removed pieces because they are
+example config. The checkpoint scripts live in the toolbox repo linked above, which is optional and not needed to
+use anything here; the subscription gate stays in the owner's private workspace. Earlier entries above still mention the removed pieces because they are
 the record of what was tried -- this note is why they are no longer in the tree.
 
 ## The task form (2026-09-21)
@@ -178,7 +178,7 @@ the record of what was tried -- this note is why they are no longer in the tree.
 The 2026-09-18 tightening made `orchestrate_flag` accept only the bare command and the three
 keywords. On 2026-09-21 the owner typed `/orchestrate work through the roadmap...`: the hook
 matched nothing, reported OFF, and the session announced it would work inline. The owner had
-invoked the skill precisely to get delegation. Fix: a prompt that starts with `/orchestrate` is
+invoked the `/orchestrate` skill (now shipped in `skills/orchestrate/`) precisely to get delegation. Fix: a prompt that starts with `/orchestrate` is
 always explicit; any remainder other than `on`/`off`/`status` turns the preference ON and is
 named as the task in the hook's output. Prompts that merely contain the command elsewhere
 still toggle nothing. Tests: 47 pass.
@@ -214,6 +214,16 @@ Rejected: (4) a cheapest-tier agent used purely as a test runner that trims outp
 failures. It is a genuine token saving, but the workspace has never routed real work to that tier
 since 2026-07-09, on intelligence grounds, and the owner declined to make the first exception for
 a saving this small.
+
+## Standing on its own (2026-09-23)
+
+The owner's rule for every public repo: linking to another repo is fine, depending on one is not. A
+read of this repository as a stranger would read it found places that still reached into the private
+workspace: a hook comment pointing at a file on the owner's machine, refusal messages citing a
+"workspace rule" the reader does not have, a test header naming the owner's install path, and a
+`/orchestrate` command whose skill half was never published. The pointers now name this repository's
+own files; the skill ships in `skills/orchestrate/`; the toolbox is linked as optional. No behavior
+changed and the three suites still pass (7, 47, 68 checks).
 
 ## What has stayed constant
 
