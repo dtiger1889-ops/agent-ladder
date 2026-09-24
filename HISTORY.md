@@ -225,6 +225,25 @@ workspace: a hook comment pointing at a file on the owner's machine, refusal mes
 own files; the skill ships in `skills/orchestrate/`; the toolbox is linked as optional. No behavior
 changed and the three suites still pass (7, 47, 68 checks).
 
+## The default worker tier moves up (2026-09-23)
+
+The owner moved the default worker tier from the cheaper tier to the newest mid-tier model, the
+day after that model shipped. Two things decided it. Its per-token price came in below the model
+it replaced, and an independent benchmark measured its cost per task at roughly the same level
+as the cheaper tier's at every matched effort setting, while scoring much higher. The old split,
+which sent mechanical packages to the cheaper tier and packages a person reads to the mid tier,
+no longer saved anything on most work. Now the mid tier is the default for both, and the
+cheaper tier stays available for pure bulk work where a measurement shows it is cheaper for the
+same result. The concurrency cap on mid-tier agents running at once is unchanged and counts
+these workers too. The model gate's refusal message was updated to name the new default.
+
+The owner's private workspace keeps a dated research note on the model's first-day reception,
+with every source linked. The complaints in it matter for anyone copying this change: the
+highest effort setting overthought simple prompts until it ran out of output, and new safety
+classifiers flagged some harmless prompts. So workers run at the default or high effort, not the
+maximum. The note also records what could not be checked. Two big discussion forums could not
+be read at all, so their views are missing from it, not neutral.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and

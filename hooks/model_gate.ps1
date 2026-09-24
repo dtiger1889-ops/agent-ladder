@@ -28,7 +28,7 @@ try {
 
     if ([string]::IsNullOrWhiteSpace($m)) {
         $msg = '[model-gate] Agent spawn refused: no model named. agent-ladder.md, model-selection principle 5: every spawn names its model. ' +
-               'Re-issue with model: sonnet (mechanical/bulk), opus (ships or user-facing) or fable. Built-in types ' +
+               'Re-issue with model: sonnet (mechanical/bulk), opus (Opus 5.5, default for most packages) or fable. Built-in types ' +
                '(claude-code-guide, Explore, Plan) default to Haiku or inherit; name it anyway.'
         [Console]::Error.WriteLine($msg)
         exit 2
