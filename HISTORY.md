@@ -244,9 +244,41 @@ classifiers flagged some harmless prompts. So workers run at the default or high
 maximum. The note also records what could not be checked. Two big discussion forums could not
 be read at all, so their views are missing from it, not neutral.
 
+## Running the ladder both ways (2026-10-04)
+
+On 2026-09-22 the owner asked, on his decision board, why the ladder only ran one way and whether
+anyone else ran it in reverse. Until then every step assumed the strongest model held the session
+and handed work down. His private workspace already had the reverse shape as a manual-only skill
+on trial since 2026-07-19, adapted from kerim's public Autodev gist: a cheap model drives a build
+and calls the strong model in as a judge at plan approval, review adjudication, and acceptance.
+
+A prior-art sweep the same day found the reverse direction is ordinary in the model-routing
+literature (FrugalGPT and the cascade pattern) and in at least two published coding-agent setups,
+while published Claude Code advice nearly always keeps the expensive model on top. It also found
+one real asymmetry. Going down, the strongest model decides when to delegate; going up, a cheap
+model would decide when to ask for help, and a gate that confidently accepts bad work is the
+documented way cascades fail. The published fix, in both the gist and a Claude Code configuration
+proposal, is to fix the call points in advance instead of leaving them to the worker. Reading the
+ladder against that, only step 2 tied judgment to whoever owned the session; the cost gate, the
+second runtime and the review step were already direction-free.
+
+The model recommended folding the pattern in as a guarded rung on 2026-09-22 and decided to do it
+on 2026-09-28, following the owner's board note. Step 2 now keeps judgment with the judgment tier
+rather than with the session owner, a new step 5 describes the inverted shape and its five guards
+(fixed call points, no overriding a verdict, failing tests stay failures, a three-strike stop, a
+full stop on a usage-limit error), and model-selection principle 5 notes that an unnamed judge can
+silently run on the cheap tier. The old steps 5 and 6 are now 6 and 7; entries above use the
+numbering of their own date.
+
+Not yet measured: whether a cheap driver actually reaches every fixed call point in a real build,
+and whether the judges catch anything the tests miss. The first real use will record both. If a
+driver skips or under-uses a call point, the rung needs a mechanical trigger, a hook or script that
+forces the call, rather than relying on the procedure text.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and
-release decisions have never left the owning session. Every enforcement layer was built
+release decisions have never left the judgment tier; since 2026-10-04 that tier can be called
+into a cheaper session instead of always owning it. Every enforcement layer was built
 after a dated failure of the prose rule, not in anticipation of one, and each one names the
 incident it answers in its header comment.

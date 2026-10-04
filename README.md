@@ -11,8 +11,9 @@ The central rule is simple: route by the shape and weight of the work, not by th
 1. **Stay inline** for short, stateful, ambiguous, or judgment-heavy work.
 2. **Use a sub-agent** when the work is large and mechanical enough to justify rebuilding context.
 3. **Add a planning lead** only when decomposing and coordinating the work is itself substantial enough to clear the cost gate and will produce multiple bounded worker briefs.
-4. **Use a second runtime** when the work is spec-frozen, repo-local, and execution-heavy, or when the primary runtime's usage pool is constrained.
-5. **Review the result in the calling session** before treating it as complete, especially when it changes user-facing output or repository state.
+4. **Invert the ladder** for long, spec-frozen builds with real tests: open the session on a cheaper model and call the stronger one in as a judge at fixed points (plan, review findings, acceptance), never at the cheap model's own discretion.
+5. **Use a second runtime** when the work is spec-frozen, repo-local, and execution-heavy, or when the primary runtime's usage pool is constrained.
+6. **Review the result in the calling session** before treating it as complete, especially when it changes user-facing output or repository state.
 
 The cost gate comes first: if the work can be finished in a few commands or a short edit, delegation usually costs more context than it saves.
 

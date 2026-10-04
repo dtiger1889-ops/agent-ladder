@@ -17,9 +17,9 @@ Evaluate the remaining whole ask, then each proposed package. Include briefing, 
 
 This gate outranks the task category. A task being “mechanical” is not enough by itself.
 
-### 2. Keep judgment work with the owner
+### 2. Keep judgment with the judgment tier
 
-Stay in the calling session for:
+Keep these with the strongest model available to the task, the judgment tier:
 
 - ambiguous requirements and architecture
 - naming, product judgment, and user-facing writing
@@ -27,7 +27,7 @@ Stay in the calling session for:
 - repository mutations that need an explicit release decision
 - reviewing delegated output
 
-Delegation can perform bounded work, but it does not transfer responsibility for the result.
+Usually the judgment tier owns the session and delegates bounded work down to cheaper workers (steps 3 and 4). It can also be called up into a cheaper session at fixed points (step 5). In both shapes the judgment tier's verdict stands, not the executing session's. Delegation can perform bounded work, but it does not transfer responsibility for the result.
 
 ### 3. Add a planning lead only for genuinely multi-layer work
 
@@ -57,13 +57,33 @@ Fix the shape of the report. Every worker ends its report with two lines — wha
 
 Give every worker a hard budget, stated in the brief: a maximum number of tool calls and a wall-clock limit. Reasonable defaults are about 40 tool calls or 15 minutes for a small package and about 120 tool calls or 45 minutes for a medium one. If the worker hits either limit it stops and reports partial work — it does not loop, and it does not retry the same failing approach again. Where the runtime supports a turn-cap field in the agent definition, set it as a backstop; a wall-clock limit usually has no such field, so it is enforced by the brief text alone.
 
-### 5. Use a second runtime deliberately
+### 5. Invert the ladder for long mechanical builds
+
+Steps 3 and 4 keep the judgment tier on top and send work down. The same judgment boundary also works in the other direction: a session opened on a cheaper model does the build and calls the stronger model in only where judgment is needed. Use this shape when all of these hold:
+
+- a written specification is frozen and serves as the contract
+- deterministic checks (tests, build, lint) exist and run locally
+- the task is long enough that most of its tokens go to writing and running code rather than deciding what to build
+
+The cheaper session is the driver. It calls the stronger model in as a judge at three fixed points: approving the plan before building starts, sorting review findings into real problems and noise, and accepting or rejecting the finished result. Each call carries a short brief (the task, the binding lines of the spec, the artifact under judgment, and the single question being asked), never the transcript, and tells the judge to rule from the brief alone.
+
+This rung needs guards the downward shape does not. Going down, the strongest tier decides when to delegate. Inverted, the cheaper model would be deciding when to ask for help, which is the weak point the model-cascade research names: a gate that confidently accepts bad work saves money by hiding failures. So:
+
+- The judgment points are fixed by the procedure before the build starts. The driver does not choose when to call a judge, and it does not skip one.
+- The driver never overrides a verdict. A rejected plan is revised and resubmitted.
+- A failing check is a failure. No judge can approve work the tests reject, and the driver never weakens a test to get past one.
+- After three rejections at the same point, the driver stops and hands the state back to a person instead of grinding.
+- If a judge call fails on a usage limit, the whole run stops. It never continues unjudged.
+
+The shape is chosen when the session opens, because the session has to start on the cheaper model; a session already running on the strong model gains nothing by spawning judges of its own tier. Keep the procedure itself (brief template, strike counting, abort rules) in a driver skill or script, and let this step decide only when to use it. A public reference for such a driver is kerim's Autodev gist, linked in the source notes.
+
+### 6. Use a second runtime deliberately
 
 A second runtime is useful when it provides a distinct execution environment, a separate usage pool, or a better fit for spec-frozen implementation work. It is not a reason to split a small task or to avoid review.
 
 Before handing work to a second runtime, make the specification self-contained. Assume it has no conversational context, no hidden decisions, and no access to tools that are not explicitly available in that runtime.
 
-### 6. Review and close
+### 7. Review and close
 
 The calling session reviews every delegated result before completion. For anything that ships, review the actual changed files and run the acceptance checks against the final tree. A successful sub-agent run is evidence of execution, not proof that the result is correct or publishable.
 
@@ -77,7 +97,7 @@ When multiple capable agents are available:
 2. Preserve taste and judgment for user-facing or shipping output.
 3. Use cost only as a tie-breaker after capability and fit.
 4. Prefer the simplest capable route once the cost gate is passed.
-5. Name the model on every delegated spawn. Omitting the model parameter is not a way to accept a default tier; it is an unrecorded choice, and the review in step 6 cannot tell which tier did the work.
+5. Name the model on every delegated spawn. Omitting the model parameter is not a way to accept a default tier; it is an unrecorded choice, and the review in step 7 cannot tell which tier did the work. It matters most in the inverted shape of step 5: a sub-agent with no model named can fall back to the calling session's model, so a judge spawned without one runs on the cheap tier it was meant to check.
 
 Do not encode fast-changing model names or permanent numerical rankings into the ladder.
 
@@ -92,4 +112,12 @@ This adaptation draws on:
 - Magentic-One's planning and progress-tracking orchestrator, https://www.microsoft.com/en-us/research/wp-content/uploads/2024/11/MagenticOne.pdf
 - AOrchestra's per-task composition of instruction, context, tools, and model, https://arxiv.org/abs/2602.03786
 
-The source ideas were adapted rather than copied literally: the model score table was omitted because model capabilities and subscription economics change, while the cost gate, judgment boundary, frozen-spec execution pattern, and bounded planning-lead layer remain useful. A planning lead is deliberately optional because extra hierarchy increases coordination cost and can compound errors when workstreams are tightly coupled.
+The inverted rung in step 5 draws on:
+
+- FrugalGPT, which sends a request to the cheapest model first and escalates only when a check on the answer fails, https://arxiv.org/abs/2305.05176
+- the model-cascade failure modes, including the gate that accepts bad work, https://www.tmls.nyc/research/model-routing-cascades
+- a published Claude Code proposal for a strong planner and cheap implementer where a script, never the worker, decides when to escalate, https://github.com/CrazyWillBear/my-dotclaude/issues/104
+- kerim's Autodev gist, a cheap driver that calls an expensive judge at plan approval, review adjudication, and final acceptance, https://gist.github.com/kerim/cb98e883e3d5ba730249344940e475a3
+- Claude Code's sub-agent documentation, where a sub-agent's model is set independently of the parent's and may be stronger, https://code.claude.com/docs/en/sub-agents
+
+The source ideas were adapted rather than copied literally: the model score table was omitted because model capabilities and subscription economics change, while the cost gate, judgment boundary, frozen-spec execution pattern, and bounded planning-lead layer remain useful. A planning lead is deliberately optional because extra hierarchy increases coordination cost and can compound errors when workstreams are tightly coupled. The inverted rung adopts the cascade idea of calling a stronger model only when needed, but takes the decision of when away from the cheap model: the call points are fixed in advance, because a cheap model deciding for itself when it needs help is the failure mode the cascade research warns about.
