@@ -1,5 +1,7 @@
 # Agent Ladder
 
+![Worked routing examples for a short edit and a large mechanical task, followed by review in the calling session](assets/example-output.png)
+
 Agent Ladder is a compact, runtime-agnostic guide to delegating work between agents, with optional PowerShell guardrails. Everything it needs is in this repository. It pairs with the [Claude Code Harness Toolbox](https://github.com/dtiger1889-ops/claude-harness-toolbox), a separate repo of session-memory tooling, but nothing here requires it.
 
 Use it to decide whether work should stay in the current session, move to a sub-agent, or run in a second agent runtime.
