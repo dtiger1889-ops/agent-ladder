@@ -3,7 +3,7 @@
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File model_gate_tests.ps1
 $hook = Join-Path $PSScriptRoot '..\hooks\model_gate.ps1'
 
-function Invoke-Hook([string]$json, [string]$userHome = '') {
+function Invoke-Hook([string]$json, [string]$userHome = '', [string]$tempDir = '') {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'powershell.exe'
     $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$hook`""
@@ -11,6 +11,8 @@ function Invoke-Hook([string]$json, [string]$userHome = '') {
     $psi.UseShellExecute = $false
     # $userHome: point the hook's USERPROFILE at a temp home so its agents folder is a temp one (effort tests).
     if ($userHome -ne '') { $psi.EnvironmentVariables['USERPROFILE'] = $userHome }
+    # $tempDir: point the hook's TEMP somewhere else (the unwritable-flag test).
+    if ($tempDir -ne '') { $psi.EnvironmentVariables['TEMP'] = $tempDir }
     $p = [System.Diagnostics.Process]::Start($psi)
     $p.StandardInput.Write($json); $p.StandardInput.Close()
     $out = $p.StandardOutput.ReadToEnd(); $err = $p.StandardError.ReadToEnd(); $p.WaitForExit()
@@ -74,6 +76,7 @@ New-Item -ItemType Directory -Path $tmpProjectAgents -Force | Out-Null
 $s8 = NewSid
 $r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'general-purpose' } $s8) $tmpRoot
 Check '8a general-purpose with no effort is blocked once' ($r.code -eq 2 -and $r.err -match 'no effort level of its own') "code=$($r.code) err=$($r.err)"
+Check '8a2 the refusal names both ways out' ($r.err -match 'Re-issue with an effort level' -and $r.err -match 'add `effort:` to that agent''s definition') "err=$($r.err)"
 $r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'general-purpose' } $s8) $tmpRoot
 Check '8b same session, second such spawn passes' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
 $r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'general-purpose'; effort = 'low' } (NewSid)) $tmpRoot
@@ -90,6 +93,22 @@ $r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'
 Check '8h definition whose only effort: line is in the body is blocked' ($r.code -eq 2 -and $r.err -match 'no effort level of its own') "code=$($r.code) err=$($r.err)"
 $r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet' } (NewSid)) $tmpRoot
 Check '8i no subagent_type counts as general-purpose and is blocked' ($r.code -eq 2 -and $r.err -match 'no effort level of its own') "code=$($r.code) err=$($r.err)"
+$longFront = "---`nname: longfront`nmodel: sonnet`n" + (((1..70) | ForEach-Object { "tools-note-$($_): x" }) -join "`n") + "`neffort: medium`n---`nbody`n"
+[IO.File]::WriteAllText((Join-Path $tmpAgents 'longfront.md'), $longFront)
+[IO.File]::WriteAllText((Join-Path $tmpAgents 'commentonly.md'), "---`nname: commentonly`neffort: # not chosen yet`nmodel: sonnet`n---`nbody`n")
+[IO.File]::WriteAllText((Join-Path $tmpAgents 'emptyeffort.md'), "---`nname: emptyeffort`neffort:`nmodel: sonnet`n---`nbody`n")
+$r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'longfront' } (NewSid)) $tmpRoot
+Check '8j effort past line 60 of a long frontmatter still counts' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'commentonly' } (NewSid)) $tmpRoot
+Check '8k comment-only effort value is no level and is blocked' ($r.code -eq 2 -and $r.err -match 'no effort level of its own') "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'emptyeffort' } (NewSid)) $tmpRoot
+Check '8l empty effort value is no level and is blocked' ($r.code -eq 2 -and $r.err -match 'no effort level of its own') "code=$($r.code) err=$($r.err)"
+$badTemp = Join-Path $tmpRoot 'not-a-folder.txt'
+[IO.File]::WriteAllText($badTemp, 'x')
+$sBad = NewSid
+$r1 = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'general-purpose' } $sBad) $tmpRoot $badTemp
+$r2 = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'general-purpose' } $sBad) $tmpRoot $badTemp
+Check '8m unwritable TEMP fails open instead of refusing every retry' ($r1.code -eq 0 -and $r2.code -eq 0) "codes=$($r1.code),$($r2.code) err=$($r1.err)"
 # Delete only the temp folder this test created.
 $resolvedRoot = [IO.Path]::GetFullPath($tmpRoot)
 if ($resolvedRoot.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()), [StringComparison]::OrdinalIgnoreCase) -and (Split-Path -Leaf $resolvedRoot) -like 'mgtest-home-*') {

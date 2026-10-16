@@ -65,11 +65,12 @@ try {
                 $agentFile = Join-Path $d ($type + '.md')
                 if (-not (Test-Path -LiteralPath $agentFile -PathType Leaf)) { continue }
                 $n = 0
-                foreach ($ln in (Get-Content -LiteralPath $agentFile -TotalCount 60)) {
+                foreach ($ln in (Get-Content -LiteralPath $agentFile)) {
                     $n++
                     if ($n -eq 1) { if ($ln.Trim() -ne '---') { break } else { continue } }
                     if ($ln.Trim() -eq '---') { break }
-                    if ($ln -match '^effort:\s*\S') { $hasEffort = $true; break }
+                    # A value must start with a letter (optionally quoted); an empty or comment-only value is no level.
+                    if ($ln -match '^effort:\s*["'']?[A-Za-z]') { $hasEffort = $true; break }
                 }
                 break
             }
@@ -79,6 +80,8 @@ try {
             $flag = Join-Path $env:TEMP ('model_gate_effort_' + $safeSid + '.flag')
             if (-not (Test-Path -LiteralPath $flag)) {
                 try { Set-Content -LiteralPath $flag -Value '1' -ErrorAction SilentlyContinue } catch {}
+                # No flag means no once-per-session memory; fail open rather than refuse every retry.
+                if (-not (Test-Path -LiteralPath $flag)) { exit 0 }
                 $msg = '[model-gate] Agent spawn blocked once: this agent type has no effort level of its own and the spawn passed none, ' +
                        'so it would run at this session''s effort. Re-issue with an effort level (agent-ladder.md, model-selection principle 6), ' +
                        'or add `effort:` to that agent''s definition; this fires once per session.'
