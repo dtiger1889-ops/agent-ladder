@@ -30,7 +30,7 @@ The repository also includes the implementation that turns the ladder into worki
 - `hooks/orchestrator_mode.ps1` — returns a nonblocking cost reminder on a write after 150 weighted lines or explicit ON. It never forbids inline edits, parses shell writes, or turns the mode on automatically.
 - `hooks/delegation_gate.ps1` — counts approximate main-session code output and provides a nonblocking fallback reminder after 600 weighted lines. Workers are excluded. Both volume hooks share one reminder per session and respect explicit OFF. Their exit-zero structured context does not override permission decisions.
 - `skills/orchestrate/SKILL.md` — the `/orchestrate` command itself: tells the agent what ON, OFF, status and a task after the command mean. Copy the folder into your skills directory (for Claude Code, `~/.claude/skills/orchestrate/`). The hook owns the state; the skill only responds to it.
-- `tests/*_tests.ps1` — subprocess regressions with isolated state: 47 intent checks, 68 shared pre/post reminder checks, and 7 model-gate checks. The delegation-gate test entry point invokes the shared suite; do not count it twice.
+- `tests/*_tests.ps1` — subprocess regressions with isolated state: 48 intent checks, 68 shared pre/post reminder checks, and 21 model-gate checks. The delegation-gate test entry point invokes the shared suite; do not count it twice.
 - `config/claude-hooks.example.json` — example user-level hook wiring.
 
 The hooks are portable PowerShell adaptations. Replace placeholders in the configuration before installing them, and review hook behavior against your own workflow.
