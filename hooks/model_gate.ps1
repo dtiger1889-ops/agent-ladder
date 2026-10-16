@@ -11,10 +11,19 @@
 # only lever is refuse-and-say. Structure: read stdin JSON, try/catch, fail OPEN (exit 0) on any error,
 # never write to the transcript.
 #
-# This is a HARD block, not block-once: fires on every unnamed or Haiku spawn, every time, no state file.
+# The model checks are HARD blocks, not block-once: they fire on every unnamed or Haiku spawn, every time,
+# with no state file. The effort check below is the one block-once check.
 #
 # Registered for PreToolUse, matcher "Agent".
 # Tests: tests/model_gate_tests.ps1. Built 2026-09-18.
+#
+# Second check, added 2026-10-16 (agent-ladder.md model-selection principle 6; HISTORY.md, "Effort, not
+# just the model (2026-10-16)"): a helper with no effort level of its own runs at its parent session's
+# level. A spawn that is not a `fork`, passes no `effort`, and whose agent definition is missing or has
+# no `effort:` key inside its frontmatter (the block between the first two `---` lines) is blocked ONCE
+# per session (state %TEMP%\model_gate_effort_<sid>.flag); re-issuing passes. Definitions are looked up
+# in the project's .claude\agents (from the hook's cwd) and in %USERPROFILE%\.claude\agents; an empty
+# subagent_type counts as general-purpose, which has no definition file. Fails open on any error.
 
 try {
     $raw = [Console]::In.ReadToEnd()
@@ -39,6 +48,44 @@ try {
                '2026-07-09 review; two false capability claims traced to Haiku doc lookups on 2026-09-18). Use sonnet.'
         [Console]::Error.WriteLine($msg)
         exit 2
+    }
+
+    # Effort check: block once per session when the helper would silently run at the session's effort.
+    $eff = "$($j.tool_input.effort)".Trim()
+    $type = "$($j.tool_input.subagent_type)".Trim()
+    if ($type -eq '') { $type = 'general-purpose' }
+    if ($type -ne 'fork' -and [string]::IsNullOrWhiteSpace($eff)) {
+        $hasEffort = $false
+        if ($type -match '^[A-Za-z0-9_.-]+$' -and $type -notmatch '\.\.') {
+            $dirs = @()
+            $cwd = "$($j.cwd)".Trim()
+            if ($cwd -ne '') { $dirs += (Join-Path $cwd '.claude\agents') }
+            if ($env:USERPROFILE) { $dirs += (Join-Path $env:USERPROFILE '.claude\agents') }
+            foreach ($d in $dirs) {
+                $agentFile = Join-Path $d ($type + '.md')
+                if (-not (Test-Path -LiteralPath $agentFile -PathType Leaf)) { continue }
+                $n = 0
+                foreach ($ln in (Get-Content -LiteralPath $agentFile -TotalCount 60)) {
+                    $n++
+                    if ($n -eq 1) { if ($ln.Trim() -ne '---') { break } else { continue } }
+                    if ($ln.Trim() -eq '---') { break }
+                    if ($ln -match '^effort:\s*\S') { $hasEffort = $true; break }
+                }
+                break
+            }
+        }
+        if (-not $hasEffort) {
+            $safeSid = ("$($j.session_id)" -replace '[^A-Za-z0-9_-]', '_')
+            $flag = Join-Path $env:TEMP ('model_gate_effort_' + $safeSid + '.flag')
+            if (-not (Test-Path -LiteralPath $flag)) {
+                try { Set-Content -LiteralPath $flag -Value '1' -ErrorAction SilentlyContinue } catch {}
+                $msg = '[model-gate] Agent spawn blocked once: this agent type has no effort level of its own and the spawn passed none, ' +
+                       'so it would run at this session''s effort. Re-issue with an effort level (agent-ladder.md, model-selection principle 6), ' +
+                       'or add `effort:` to that agent''s definition; this fires once per session.'
+                [Console]::Error.WriteLine($msg)
+                exit 2
+            }
+        }
     }
 
     exit 0

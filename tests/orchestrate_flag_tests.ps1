@@ -71,6 +71,7 @@ try {
     Check 'status is read only while ON' ((Has 'on') -and (Get-Item $on).LastWriteTimeUtc -eq $before -and $r.out -match 'routing preference ON')
     $r = Invoke-Hook 'continue'
     Check 'per-prompt reminder prices whole remainder and every package' ($r.out -match 'remaining whole ask AND each package' -and $r.out -match 'startup/context.*brief.*execution.*review/integration.*rework' -and $r.out -match 'small work stays inline' -and $r.out -notmatch 'docs and CHECKPOINT only|every code change goes|build-shaped')
+    Check 'per-prompt reminder asks for model and effort' ($r.out -match 'name its model and its effort')
     foreach ($prompt in @('<task-notification>orchestrate this</task-notification>', '<agent-message>delegate this</agent-message>', 'Stop hook feedback orchestrate this', 'Goal check-in orchestrate this', '<system-reminder>orchestrate this</system-reminder>')) {
         $r = Invoke-Hook $prompt
         Check "harness prompt ignored: $prompt" ($r.code -eq 0 -and -not $r.out -and (Get-Item $on).LastWriteTimeUtc -eq $before)

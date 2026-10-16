@@ -275,6 +275,38 @@ and whether the judges catch anything the tests miss. The first real use will re
 driver skips or under-uses a call point, the rung needs a mechanical trigger, a hook or script that
 forces the call, rather than relying on the procedure text.
 
+## Effort, not just the model (2026-10-16)
+
+On 2026-10-16 the owner asked for the ladder's effort handling to be researched and reworked. A
+measurement over every saved helper run on his machine (995 of them) found that a helper given no
+effort level ran at its parent session's level every time since late September; the only helpers
+that ran at a level of their own were the twelve spawned after the owner named a level in his
+request. The cause was not the model's judgment. The spawning tool is written to set an effort
+level only when an instruction asks for one, and none of the ladder's rules did: they all asked for
+the model and nothing else. A per-model effort setting in the user settings file did not reach
+helpers either.
+
+A prior-art pass the same day found that Claude Code lets an agent definition carry its own effort
+level, which beats the session's, and lets a spawn override the definition; Codex takes the spawn's
+value, then a configured default, then the parent's. Anthropic's effort guidance names the lowest
+level for "simpler tasks ... such as subagents", and one published routing skill sorts work by
+whether it can be checked mechanically and refuses to raise the tier on checkable work "to be safe".
+
+The owner picked from three choices on his decision board: a default effort in the worker
+definitions, a short split by kind of work (now model-selection principle 6), and a gate that
+refuses a spawn once per session when an agent type with no default is launched with no level. An
+independent audit of the proposal found thirteen problems before the build, all fixed. Before the
+rules changed, a probe tested the definition route: fresh sessions started at the deepest everyday
+level ran a worker at the middle level, in the foreground and in the background. The session that
+edited the definitions did not; it never reloaded agent definitions, although the documentation says
+a watcher picks up changes within seconds. A session started before an edit keeps the old
+definition until it restarts, which is why principle 6 says to check the level a helper actually
+ran at.
+
+Not yet measured: whether packages at the lowest level hold up. The next ten delegated packages are
+checked, and if two or more low-level packages need the step-up rule, the split drops its lowest
+level.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and

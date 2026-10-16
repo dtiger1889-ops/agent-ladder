@@ -58,7 +58,7 @@ try {
     $modeState = 'OFF'
     if ((Test-Path -LiteralPath $flag) -and -not (Test-Path -LiteralPath $offMarker)) { $modeState = 'ON' }
     if ($intent -eq 'status') { Write-Output "[orchestrator] routing preference $modeState." }
-    Write-Output "[delegation] Compare inline effort for the remaining whole ask AND each package against total worker startup/context + brief + execution + review/integration + rework; small work stays inline. Reuse a suitable worker; name its model. Routing preference: $modeState."
+    Write-Output "[delegation] Compare inline effort for the remaining whole ask AND each package against total worker startup/context + brief + execution + review/integration + rework; small work stays inline. Reuse a suitable worker; name its model and its effort (agent-ladder.md, model-selection principle 6). Routing preference: $modeState."
     exit 0
 }
 catch { exit 0 }
