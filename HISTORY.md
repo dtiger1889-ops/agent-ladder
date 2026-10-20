@@ -303,9 +303,24 @@ a watcher picks up changes within seconds. A session started before an edit keep
 definition until it restarts, which is why principle 6 says to check the level a helper actually
 ran at.
 
-Not yet measured: whether packages at the lowest level hold up. The next ten delegated packages are
-checked, and if two or more low-level packages need the step-up rule, the split drops its lowest
-level.
+The trial closed 2026-10-18: of 110 helpers spawned, three ran at the lowest level and none of the
+three needed the step-up rule, so the split kept its lowest level.
+
+## Checkable or verdict (2026-10-18)
+
+Two days earlier a staleness sweep, "verify these rows are not stale", had gone to five cheap-tier
+workers as if it were a fact-check against a fixed list. Judgment-tier re-checks overturned three of
+the first verdicts: a row called pointless that was live and blocked, and two rows called live that
+were closed, one by an owner reply the worker never read. The whole pass was redone on the judgment
+tier. The rule already said the cheap tier takes checkable work; the misfile came from wording that
+let any list-shaped task read as checkable.
+
+The fix is model-selection principle 7: a package is checkable only if its answer key exists before
+the worker starts and the brief names it, and a verdict package goes to the judgment tier however
+long the list. Its backstop is a third check in `hooks/model_gate.ps1`: the first cheap-tier spawn in
+a session whose brief carries verdict words and names no answer key is refused once. An audit of the
+check found that a spec named by its file path should count as an answer key and the bare word
+"spec" should not; the tests cover both.
 
 ## What has stayed constant
 

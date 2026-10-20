@@ -24,6 +24,11 @@
 # per session (state %TEMP%\model_gate_effort_<sid>.flag); re-issuing passes. Definitions are looked up
 # in the project's .claude\agents (from the hook's cwd) and in %USERPROFILE%\.claude\agents; an empty
 # subagent_type counts as general-purpose, which has no definition file. Fails open on any error.
+#
+# Third check, added 2026-10-18 (agent-ladder.md model-selection principle 7; HISTORY.md, "Checkable or
+# verdict (2026-10-18)"): a Sonnet spawn whose brief carries verdict words (verify, decide, review, audit,
+# stale, still needed, ...) and names no answer key (a test, fixture, spec .md path, literal strings) is
+# blocked ONCE per session (state %TEMP%\model_gate_verdict_<sid>.flag); re-issuing passes. Runs last.
 
 try {
     $raw = [Console]::In.ReadToEnd()
@@ -85,6 +90,28 @@ try {
                 $msg = '[model-gate] Agent spawn blocked once: this agent type has no effort level of its own and the spawn passed none, ' +
                        'so it would run at this session''s effort. Re-issue with an effort level (agent-ladder.md, model-selection principle 6), ' +
                        'or add `effort:` to that agent''s definition; this fires once per session.'
+                [Console]::Error.WriteLine($msg)
+                exit 2
+            }
+        }
+    }
+
+    # Verdict check: a Sonnet spawn whose brief asks for a verdict and names no answer key is blocked once per session.
+    if ($m -match '(?i)sonnet') {
+        $body = "$($j.tool_input.prompt)".ToLower()
+        $verdictRe = '\b(verify|verifies|verifying|decide|decides|deciding|judge|judging|assess|assessing|evaluate|evaluating|triage|triaging|audit|auditing|review|reviewing|stale|still (needed|live|open|valid|relevant|true)|is it done|which option|worth (it|keeping|adding))\b'
+        $keyRe = '\banswer key\b|\bacceptance (check|command|test|criteria)\b|\bfixtures?\b|\bexpected (output|outputs|value|values|result|results)\b|\b[\w.-]+_tests?\.(ps1|py)\b|\btests? (pass|passes|must pass)\b|\b(pytest|npm test|cargo test|go test)\b|\bliteral strings?\b|\bmatch(es)? exactly\b|\bspec(s|ification)?\b[^\n]{0,40}?[\w~:./\\-]+\.md\b|\bspecs?[\\/][\w./\\-]+\.md\b'
+        if ($body -match $verdictRe -and $body -notmatch $keyRe) {
+            $safeSidV = ("$($j.session_id)" -replace '[^A-Za-z0-9_-]', '_')
+            $flagV = Join-Path $env:TEMP ('model_gate_verdict_' + $safeSidV + '.flag')
+            if (-not (Test-Path -LiteralPath $flagV)) {
+                try { Set-Content -LiteralPath $flagV -Value '1' -ErrorAction SilentlyContinue } catch {}
+                # No flag means no once-per-session memory; fail open rather than refuse every retry.
+                if (-not (Test-Path -LiteralPath $flagV)) { exit 0 }
+                $msg = '[model-gate] Sonnet spawn blocked once: the brief asks for a verdict (verify, decide, review, audit, stale, still needed) and names no answer key. ' +
+                       'Sonnet takes a package only when a fixed answer key exists before the worker starts (a test, a fixture, a spec named by its .md path, a list of literal strings) and the brief names it; ' +
+                       'a verdict package runs on opus however long the list (agent-ladder.md, model-selection principle 7). ' +
+                       'Re-issue on opus, or name the answer key in the brief; re-issuing this exact call passes, and this fires once per session.'
                 [Console]::Error.WriteLine($msg)
                 exit 2
             }

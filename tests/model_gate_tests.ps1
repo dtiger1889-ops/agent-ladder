@@ -109,6 +109,34 @@ $sBad = NewSid
 $r1 = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'general-purpose' } $sBad) $tmpRoot $badTemp
 $r2 = Invoke-Hook (AgentJson @{ description = 'x'; prompt = 'x'; model = 'sonnet'; subagent_type = 'general-purpose' } $sBad) $tmpRoot $badTemp
 Check '8m unwritable TEMP fails open instead of refusing every retry' ($r1.code -eq 0 -and $r2.code -eq 0) "codes=$($r1.code),$($r2.code) err=$($r1.err)"
+
+# 9. verdict check: a Sonnet spawn whose brief asks for a verdict and names no answer key is blocked once
+# per session; the judgment tier or a named answer key passes. Effort is passed so check 8 stays out of the way.
+function VJson([string]$prompt, [string]$model, [string]$sid) {
+    return (AgentJson @{ description = 'x'; prompt = $prompt; model = $model; subagent_type = 'general-purpose'; effort = 'medium' } $sid)
+}
+$verdict = 'verify these 147 tracker rows are not stale and decide which are still needed'
+$s9 = NewSid
+$r = Invoke-Hook (VJson $verdict 'sonnet' $s9) $tmpRoot
+Check '9a Sonnet staleness verdict is blocked once' ($r.code -eq 2 -and $r.err -match 'Sonnet spawn blocked once' -and $r.err -match 'answer key') "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson $verdict 'sonnet' $s9) $tmpRoot
+Check '9b re-issue in the same session passes' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson $verdict 'opus' (NewSid)) $tmpRoot
+Check '9c the same verdict brief on opus passes' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson 'verify each row against the answer key in C:/tmp/key.txt' 'sonnet' (NewSid)) $tmpRoot
+Check '9d verdict words with a named answer key pass' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson 'rename the files, then verify that rename_tests.ps1 passes' 'sonnet' (NewSid)) $tmpRoot
+Check '9e verify plus a named test script passes' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson 'fetch these 12 URLs and save each page as markdown' 'sonnet' (NewSid)) $tmpRoot
+Check '9f mechanical Sonnet brief with no verdict words passes' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson 'Review the delegated branch and decide whether it is done' 'claude-sonnet-5-5' (NewSid)) $tmpRoot
+Check '9g full Sonnet model id with a review verdict is blocked' ($r.code -eq 2 -and $r.err -match 'Sonnet spawn blocked once') "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson 'Audit the implementation against the fixed spec C:/tmp/spec.md.' 'sonnet' (NewSid)) $tmpRoot
+Check '9h verdict brief naming a spec file passes' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson 'Review the build against docs/specs/gate.md and list gaps' 'sonnet' (NewSid)) $tmpRoot
+Check '9i verdict brief naming a specs/ path passes' ($r.code -eq 0) "code=$($r.code) err=$($r.err)"
+$r = Invoke-Hook (VJson 'Review the work and decide whether it meets the spec' 'sonnet' (NewSid)) $tmpRoot
+Check '9j "the spec" with no named file is still blocked' ($r.code -eq 2 -and $r.err -match 'spec named by its .md path') "code=$($r.code) err=$($r.err)"
 # Delete only the temp folder this test created.
 $resolvedRoot = [IO.Path]::GetFullPath($tmpRoot)
 if ($resolvedRoot.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()), [StringComparison]::OrdinalIgnoreCase) -and (Split-Path -Leaf $resolvedRoot) -like 'mgtest-home-*') {
