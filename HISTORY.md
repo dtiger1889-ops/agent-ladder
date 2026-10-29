@@ -322,6 +322,21 @@ a session whose brief carries verdict words and names no answer key is refused o
 check found that a spec named by its file path should count as an answer key and the bare word
 "spec" should not; the tests cover both.
 
+## The top model plans, it does not lead (2026-10-29)
+
+An overnight triage run was led by the top-priced model, with eight workers on the tier below it.
+Measured afterwards from the session transcripts: about a quarter of the lead's output tokens went to
+inline edits that a worker should have made, and the lead's own context reads (93.6M cached tokens)
+nearly matched those of all eight workers combined (103M). The owner had already run the other split
+successfully: a batch of unattended overnight sessions led by the tier below (2026-10-18), and a
+multi-phase game-UI rebuild where the top model wrote only the long-range plan and the build ran
+from it (2026-10-24).
+
+The owner's decision the same day: the top model never leads a session again. The tier below owns
+the session and orchestrates; the top model is called in only to write long-range plans. The rule is
+the last paragraph of step 2 and the closing note of step 3. Like the model names elsewhere in this
+repo, the split is stated by tier, because which models fill which tier will change.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and

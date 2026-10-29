@@ -19,7 +19,7 @@ This gate outranks the task category. A task being “mechanical” is not enoug
 
 ### 2. Keep judgment with the judgment tier
 
-Keep these with the strongest model available to the task, the judgment tier:
+Keep these with the judgment tier, the strongest model that owns the session (which tier that is: the end of this step):
 
 - ambiguous requirements and architecture
 - naming, product judgment, and user-facing writing
@@ -29,6 +29,8 @@ Keep these with the strongest model available to the task, the judgment tier:
 
 Usually the judgment tier owns the session and delegates bounded work down to cheaper workers (steps 3 and 4). It can also be called up into a cheaper session at fixed points (step 5). In both shapes the judgment tier's verdict stands, not the executing session's. Delegation can perform bounded work, but it does not transfer responsibility for the result.
 
+The judgment tier is not automatically the most expensive model on offer. When the top model costs several times the tier below it, and that tier is strong enough to brief, review, and release, the tier below owns the session and does the orchestration. The top model is called in as a helper for one package only: the long-range plan, meaning the multi-phase plan or spec the session then carries out. It does not run sessions or spawn workers. The orchestrating session edits inline only for small one-off fixes and sends everything else to workers.
+
 ### 3. Add a planning lead only for genuinely multi-layer work
 
 A planning lead is warranted when the owner has settled the goal and boundaries, but producing the implementation plan, interfaces, and worker briefs is itself a large task. The planning lead turns that direction into bounded packages and may delegate those packages to workers when the runtime supports nested agents.
@@ -36,6 +38,8 @@ A planning lead is warranted when the owner has settled the goal and boundaries,
 Use this layer only when there are multiple substantial workstreams to coordinate. Apply the cost gate to every delegation edge: if the planning work is small, the owner plans inline and delegates directly to workers.
 
 The default maximum is two levels below the owner: one planning lead and its workers. The owner retains final authority; the planning lead owns decomposition and contracts; workers own only their assigned packages.
+
+The long-range plan from the top model (step 2) is a different package from this layer: it is written once, up front, and handed back to the orchestrating session, which then decomposes it itself or through a planning lead on its own tier.
 
 ### 4. Delegate bounded mechanical work
 
