@@ -8,6 +8,14 @@ Use it to decide whether work should stay in the current session, move to a sub-
 
 The central rule is simple: route by the shape and weight of the work, not by the task's label.
 
+## Start here
+
+Read [agent-ladder.md](agent-ladder.md) and apply its cost gate to one task before installing anything. The guide needs no software or AI account just to read. To use it with an agent, give it the file and ask:
+
+> Recommend whether this task should stay in this session or be delegated. Explain the context cost and the worker's acceptance check. Do not launch a worker yet.
+
+The first result is a routing recommendation. A skill is optional: `skills/orchestrate/` adds an explicit command, while `hooks/` and the example configuration are optional PowerShell/Claude Code integrations. Other runtimes can follow the written rules, but need their own hook wiring and delegation tools; copying the guide does not install enforcement.
+
 ## The ladder
 
 1. **Stay inline** for short, stateful, ambiguous, or judgment-heavy work.
@@ -37,6 +45,10 @@ The repository also includes the implementation that turns the ladder into worki
 
 The hooks are portable PowerShell adaptations. Replace placeholders in the configuration before installing them, and review hook behavior against your own workflow.
 
+## Help
+
+For adaptation questions or hook errors, [open an issue](https://github.com/dtiger1889-ops/agent-ladder/issues) with the runtime and a redacted description.
+
 ## Status
 
-This is a compact, runtime-agnostic adaptation of a larger private harness routing framework. Model names and product-specific capabilities are intentionally omitted because they change over time.
+This is a compact adaptation of a larger private harness routing framework. The written decision rules are runtime-agnostic; the hooks and model recommendations are specific integrations and dated choices, documented separately in the linked guide.
