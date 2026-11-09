@@ -25,7 +25,7 @@ The first result is a routing recommendation. A skill is optional: `skills/orche
 5. **Use a second runtime** when the work is spec-frozen, repo-local, and execution-heavy, or when the primary runtime's usage pool is constrained.
 6. **Review the result in the calling session** before treating it as complete, especially when it changes user-facing output or repository state.
 
-Which model fills each role today (Claude Opus 5.5 orchestrates, Claude Fable 5.1 plans, Claude Sonnet 5.5 takes bulk checkable work): the dated "Models in use" table at the top of [agent-ladder.md](agent-ladder.md).
+Which model fills each role today (Claude Opus 5.5 orchestrates, Claude Fable 5.2 plans, Claude Sonnet 5.5 takes bulk checkable work): the dated "Models in use" table at the top of [agent-ladder.md](agent-ladder.md).
 
 The cost gate comes first: if the work can be finished in a few commands or a short edit, delegation usually costs more context than it saves.
 

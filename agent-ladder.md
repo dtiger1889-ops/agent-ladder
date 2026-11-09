@@ -4,14 +4,14 @@
 
 Choose the narrowest execution layer that can do the work reliably while preserving judgment in the session that owns the task.
 
-## Models in use (as of 2026-10-29)
+## Models in use (as of 2026-11-09)
 
 A change to this table changes the ladder; the steps below name these models where the choice depends on them.
 
 | Model | Model id | Role in the ladder |
 |---|---|---|
 | Claude Opus 5.5 | `claude-opus-5-5` | Leads every session and orchestrates: briefs, spawns, review, integration, release. Default worker, at medium effort |
-| Claude Fable 5.1 | `claude-fable-5-1` | Writes long-range (multi-phase) plans only, called as a helper. Never leads a session or spawns workers |
+| Claude Fable 5.2 | `claude-fable-5-2` | Writes long-range (multi-phase) plans only, called as a helper. Never leads a session or spawns workers |
 | Claude Sonnet 5.5 | `claude-sonnet-5-5` | Workers for bulk, checkable packages whose answer key exists before the worker starts (principle 7) |
 | Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | Not used for real work (principle 5; `hooks/model_gate.ps1` refuses it) |
 | Sol 6.1 (Codex) | `gpt-6.1-sol` | Read-only second reader: audits plans and finished work, low effort unless named |
@@ -41,7 +41,7 @@ Keep these with the judgment tier, the strongest model that owns the session (wh
 
 Usually the judgment tier owns the session and delegates bounded work down to cheaper workers (steps 3 and 4). It can also be called up into a cheaper session at fixed points (step 5). In both shapes the judgment tier's verdict stands, not the executing session's. Delegation can perform bounded work, but it does not transfer responsibility for the result.
 
-The judgment tier is not automatically the most expensive model on offer. When the top model costs several times the tier below it, and that tier is strong enough to brief, review, and release, the tier below owns the session and does the orchestration. The top model is called in as a helper for one package only: the long-range plan, meaning the multi-phase plan or spec the session then carries out. It does not run sessions or spawn workers. The orchestrating session edits inline only for small one-off fixes and sends everything else to workers. Today that means Claude Opus 5.5 owns the session and orchestrates, and Claude Fable 5.1 writes long-range plans only.
+The judgment tier is not automatically the most expensive model on offer. When the top model costs several times the tier below it, and that tier is strong enough to brief, review, and release, the tier below owns the session and does the orchestration. The top model is called in as a helper for one package only: the long-range plan, meaning the multi-phase plan or spec the session then carries out. It does not run sessions or spawn workers. The orchestrating session edits inline only for small one-off fixes and sends everything else to workers. Today that means Claude Opus 5.5 owns the session and orchestrates, and Claude Fable 5.2 writes long-range plans only.
 
 ### 3. Add a planning lead only for genuinely multi-layer work
 
@@ -51,7 +51,7 @@ Use this layer only when there are multiple substantial workstreams to coordinat
 
 The default maximum is two levels below the owner: one planning lead and its workers. The owner retains final authority; the planning lead owns decomposition and contracts; workers own only their assigned packages.
 
-The long-range plan from Claude Fable 5.1, the top model (step 2), is a different package from this layer: it is written once, up front, and handed back to the orchestrating session, which then decomposes it itself or through a planning lead on its own tier.
+The long-range plan from Claude Fable 5.2, the top model (step 2), is a different package from this layer: it is written once, up front, and handed back to the orchestrating session, which then decomposes it itself or through a planning lead on its own tier.
 
 ### 4. Delegate bounded mechanical work
 

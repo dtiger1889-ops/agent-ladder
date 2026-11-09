@@ -339,6 +339,13 @@ the split by tier with no model names; the owner corrected it the same day, beca
 names no models cannot show what a model change changes. The "Models in use" table at the top of
 agent-ladder.md now carries the names.
 
+## Fable 5.2 replaces Fable 5.1 (2026-11-09)
+
+Anthropic released Claude Fable 5.2 (`claude-fable-5-2`) on 2026-11-09, billed as an upgrade over
+5.1 at a lower price ($8 / $40 per million input / output tokens, down from $10 / $50):
+https://www.anthropic.com/claude-fable-and-mythos-5-2. The "Models in use" table and the steps
+that name the planning model now say Fable 5.2. Its role is unchanged: long-range plans only.
+
 ## What has stayed constant
 
 The cost gate has outranked every model-choice rule since 2026-06-15. Judgment, taste, and
